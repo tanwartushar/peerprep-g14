@@ -5,9 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	// "log"
+	"strings"
 
-	"github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	// "time"
+
+	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
 	// "golang.org/x/text/cases"
 )
@@ -32,22 +36,28 @@ const (
 	doubly_linked_list
 )
 
-// Map strings to their corresponding enum values
-var stringToTopicMap = map[string]topic{
-    "binary search":        binary_search,
-    "depth first search":   depth_first_search,
-    "breadth first search": breadth_first_search,
-    "singly linked list":   singly_linked_list,
-    "doubly linked list":   doubly_linked_list,
+type TopicStore struct {
+    topics map[string]struct{}
+}
+
+func NewTopicStore() *TopicStore {
+    return &TopicStore{
+        topics: map[string]struct{}{
+            "binary_search":        {},
+			"depth_first_search":   {},
+			"breadth_first_search": {},
+			"singly_linked_list":   {},
+			"doubly_linked_list":   {},
+        },
+    }
 }
 
 type question struct {
-	uid                  string
-	question_title       string
-	question_description string
-	difficulty_level     difficulty
-	related_topic        []topic
-	created_at           time.Time
+	Question_title       string		//`bson:"question_title,omitempty"`
+	Question_description string		//`bson:"question_description,omitempty"`
+	Difficulty_level     string		//`bson:"difficulty_level,omitempty"`
+	Related_topic        []string	//`bson:"related_topic,omitempty"`
+	// created_at           time.Time
 	// image_url
 }
 
@@ -56,85 +66,86 @@ type question struct {
 // 	return [...]string{"Easy", "Medium", "Hard"}[d]
 // }
 
-func stringToDifficulty(s string) (difficulty, error) {
+func validateDifficulty(s string) (string, error) {
+	validDiff := false
+	s = strings.ToLower(s)
+
     switch s {
-    case "easy":   return easy, nil
-    case "medium": return medium, nil
-    case "hard":   return hard, nil
-    default:       return 0, errors.New("unknown difficulty level")
-    }
+    case "easy":   validDiff = true
+    case "medium": validDiff = true
+    case "hard":   validDiff = true
+    default:       validDiff = false
+	}
+
+	if validDiff == true {
+		return s, nil
+	} else {
+		return "", errors.New("unknown difficulty level")
+	}
 }
 
-func convertAndValidateTopics(input []string) ([]topic, error) {
-    var result []topic
+func validateTopics(input []string, ts *TopicStore) ([]string, error) {
+    var result []string
+	validTopic := false
 
     for _, s := range input {
-        // Check if the string exists in our map
-        t, exists := stringToTopicMap[s]
-        if !exists {
-            return nil, fmt.Errorf("invalid topic: %s", s)
-        }
-        result = append(result, t)
+        // Check if the string exists in our list
+		if _, ok := ts.topics[s]; ok {
+        fmt.Printf("%s exist\n", s)
+		result = append(result, s)
+		validTopic = true
+    	} else {
+			validTopic = false
+			break
+		}
     }
-
+	if validTopic == false {
+		return nil, errors.New("unknown topic input")
+	}
     return result, nil
 }
 
-func CreateQuestion(title *string, desc *string, diff string, topics []string) {
-	var doc question
-
-	// validateTitle(title)
-	validatedLevel, err := stringToDifficulty(diff)
-	if err != nil {
-		fmt.Println("Validation Error:", err)
-        return // Stop execution if the difficulty is invalid
-    }
-
-	validatedTopics, err := convertAndValidateTopics(topics)
-	if err != nil {
-		fmt.Println("Validation Error:", err)
-        return // Stop execution if the difficulty is invalid
-    }
-
-	doc.question_title = *title
-	doc.question_description = *desc
-	doc.difficulty_level = validatedLevel
-	doc.related_topic = validatedTopics
-
-	println(doc.question_title)
-	println(doc.question_description)
-	println(doc.difficulty_level)		//TODO
-	println(doc.related_topic)
-	
-	client := database.ConnectMongo()
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
-	result, err := question_coll.InsertOne(context.TODO(), doc)
-	fmt.Printf("Inserted document with _id: %v\n", result.InsertedID)
+func initQuestion() question{
+	var quest_struct question
+	quest_struct.Question_title = ""
+	quest_struct.Question_description = ""
+	quest_struct.Difficulty_level = ""
+	quest_struct.Related_topic = []string{}
+	return quest_struct
 }
 
-// func validateDifficulty(diff string, quest_struct *question) (*question, error) {
-// 	switch diff {
-// 	case "easy":
-// 		quest_struct.difficulty_level = easy
-// 	case "medium":
-// 		quest_struct.difficulty_level = medium
-// 	case "hard":
-// 		quest_struct.difficulty_level = hard
-// 	default:
-// 		return nil, errors.New("invalid difficulty: " + diff)
-// 	}
-// 	return quest_struct, nil
-// }
+func CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) {
+	doc := initQuestion()
+	topicstore := NewTopicStore()
+	// validateTitle(title)
+	validatedLevel, err := validateDifficulty(diff)
+	if err != nil {
+		fmt.Println("Validation Error:", err)
+        return // Stop execution if the difficulty is invalid
+    }
 
+	validatedTopics, err := validateTopics(topics, topicstore)
+	if err != nil {
+		fmt.Println("Validation Error:", err)
+        return // Stop execution if the difficulty is invalid
+    }
 
+	doc.Question_title = *title
+	doc.Question_description = *desc
+	doc.Difficulty_level = validatedLevel
+	doc.Related_topic = validatedTopics
 
-func main() {
-	// var diff difficulty = Easy
-	// fmt.Printf("%s", diff)
-	title := "Reverse list"
-	desc := "sdlkfjsdlfj"
-	diff := "easy"
-	topic := []string{"binary search", "singly linked list"}
+	fmt.Printf("Inserting: \n")
+	fmt.Printf("Title: %s\n", doc.Question_title)
+	fmt.Printf("Desc: %s\n", doc.Question_description)
+	fmt.Printf("Diff: %s\n", doc.Difficulty_level)
+	fmt.Printf("Topics: %s\n", doc.Related_topic)
 
-	CreateQuestion(&title, &desc, diff, topic)
+	// client := database.ConnectMongo()
+	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+	result, err := question_coll.InsertOne(context.TODO(), doc)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Inserted document with _id: %v\n", result.InsertedID)
 }

@@ -3,9 +3,10 @@ package database
 import (
 	"context"
 	// "encoding/json"
-	// "fmt"
+	"fmt"
 	"log"
 	"os"
+	// "time"
 
 	"github.com/joho/godotenv"
 	// "go.mongodb.org/mongo-driver/v2/bson"
@@ -14,7 +15,6 @@ import (
 )
 
 func ConnectMongo() *mongo.Client {
-	// func ConnectMongo() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -25,18 +25,30 @@ func ConnectMongo() *mongo.Client {
 		log.Fatal("Set your 'MONGODB_URI' environment variable. " +
 			"See: " + docs +
 			"usage-examples/#environment-variable")
-	}
+	} else {
+        fmt.Println("Attempting to connect with a URI length of:", len(uri))
+    }
+
+	// ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    // defer cancel()
+	ctx := context.Background()
+
 	client, err := mongo.Connect(options.Client().
 		ApplyURI(uri))
 	if err != nil {
-		panic(err)
+		// panic(err)
+		log.Fatalf("Failed to initialize MongoDB client: %v", err)
 	}
+	if err := client.Ping(ctx, nil); err != nil {
+        log.Fatalf("Could not connect to MongoDB: %v", err)
+    }
+	log.Println("Successfully connected to MongoDB!")
 
-	defer func() {
-		if err := client.Disconnect(context.TODO()); err != nil {
-			panic(err)
-		}
-	}()
+	// defer func() {
+	// 	if err := client.Disconnect(context.TODO()); err != nil {
+	// 		panic(err)
+	// 	}
+	// }()
 
 	return client
 
@@ -64,4 +76,9 @@ func ConnectMongo() *mongo.Client {
 	// fmt.Printf("%s\n", jsonData)
 
 	// return client
+}
+
+func closeConnection(client *mongo.Client) {
+	client.Disconnect(context.Background())
+	log.Printf("Mongo Client disconnecting")
 }
