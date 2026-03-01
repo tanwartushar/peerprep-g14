@@ -5,10 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	// "log"
 	"strings"
-
-	// "time"
+	"time"
 
 	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -57,7 +57,7 @@ type question struct {
 	Question_description string		//`bson:"question_description,omitempty"`
 	Difficulty_level     string		//`bson:"difficulty_level,omitempty"`
 	Related_topic        []string	//`bson:"related_topic,omitempty"`
-	// created_at           time.Time
+	Created_at           string
 	// image_url
 }
 
@@ -111,6 +111,7 @@ func initQuestion() question{
 	quest_struct.Question_description = ""
 	quest_struct.Difficulty_level = ""
 	quest_struct.Related_topic = []string{}
+	quest_struct.Created_at = ""
 	return quest_struct
 }
 
@@ -134,12 +135,14 @@ func CreateQuestion(title *string, desc *string, diff string, topics []string, c
 	doc.Question_description = *desc
 	doc.Difficulty_level = validatedLevel
 	doc.Related_topic = validatedTopics
-
+	doc.Created_at = time.Now().Format(time.DateTime)
+	
 	fmt.Printf("Inserting: \n")
 	fmt.Printf("Title: %s\n", doc.Question_title)
 	fmt.Printf("Desc: %s\n", doc.Question_description)
 	fmt.Printf("Diff: %s\n", doc.Difficulty_level)
 	fmt.Printf("Topics: %s\n", doc.Related_topic)
+	fmt.Printf("createdAt: %s\n", doc.Created_at)
 
 	// client := database.ConnectMongo()
 	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
