@@ -1,0 +1,290 @@
+.workspace-layout {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-primary);
+    overflow: hidden;
+}
+
+/* Header */
+.workspace-header {
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    background-color: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-light);
+    z-index: 10;
+}
+
+.header-left,
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.workspace-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.125rem;
+}
+
+.font-semibold {
+    font-weight: 600;
+}
+
+.session-info {
+    display: flex;
+    gap: 0.5rem;
+    padding-left: 1.5rem;
+    border-left: 1px solid var(--border-light);
+}
+
+.tag-sm {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+    text-transform: capitalize;
+}
+
+.peer-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.status-indicator.online {
+    background-color: var(--success);
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+/* Main Area */
+.workspace-main {
+    flex: 1;
+    display: flex;
+    height: calc(100vh - 60px);
+}
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Question Panel */
+.question-panel {
+    width: 40%;
+    border-right: 1px solid var(--border-light);
+    background-color: var(--bg-primary);
+    overflow-y: auto;
+}
+
+.panel-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+.panel-title {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+.custom-tag.text-success {
+    color: var(--success);
+}
+
+.custom-tag.bg-success-light {
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.panel-content {
+    padding: 1.5rem;
+}
+
+.custom-prose p {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.custom-prose code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.2rem 0.4rem;
+    border-radius: var(--radius-sm);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.875rem;
+}
+
+.example-block {
+    margin-top: 1.5rem;
+}
+
+.example-block strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.example-block pre {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    margin: 0;
+}
+
+/* Editor Panel */
+.editor-panel {
+    width: 60%;
+    background-color: var(--bg-secondary);
+}
+
+.editor-header {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1rem;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-light);
+}
+
+.editor-tabs {
+    display: flex;
+    height: 100%;
+}
+
+.editor-tab {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--border-light);
+    border-left: 1px solid var(--border-light);
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    margin-left: -1px;
+}
+
+.editor-tab.active {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border-top: 2px solid var(--accent-primary);
+}
+
+.editor-actions {
+    display: flex;
+    align-items: center;
+}
+
+.editor-content {
+    flex: 1;
+    display: flex;
+    position: relative;
+    background-color: #1e1e1e;
+    /* VS Code dark theme look */
+    overflow: hidden;
+}
+
+.line-numbers {
+    padding: 1rem 0.5rem;
+    background-color: #1e1e1e;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    color: #858585;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    user-select: none;
+    min-width: 40px;
+}
+
+.line-number {
+    height: 1.5em;
+}
+
+.code-textarea {
+    flex: 1;
+    background: transparent;
+    color: #d4d4d4;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    padding: 1rem;
+    border: none;
+    resize: none;
+    outline: none;
+    white-space: pre;
+    tab-size: 2;
+}
+
+/* Console */
+.editor-console {
+    height: 200px;
+    background-color: var(--bg-primary);
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
+}
+
+.console-header {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border-light);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.console-content {
+    flex: 1;
+    padding: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    overflow-y: auto;
+}
+
+/* Floating Action Button for Chat */
+.chat-fab {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    box-shadow: var(--shadow-lg), 0 0 20px rgba(99, 102, 241, 0.4);
+    transition: transform var(--transition-fast), background-color var(--transition-fast);
+    z-index: 100;
+}
+
+.chat-fab:hover {
+    transform: scale(1.05);
+    background: var(--accent-hover);
+}

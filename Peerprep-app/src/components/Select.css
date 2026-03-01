@@ -1,0 +1,94 @@
+.select-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.select-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+    text-align: left;
+}
+
+.select-container {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.select-icon-left {
+    position: absolute;
+    left: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.select-icon-right {
+    position: absolute;
+    right: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.select-field {
+    width: 100%;
+    padding: 0.625rem 2.5rem 0.625rem 1rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background-color: rgba(15, 23, 42, 0.4);
+    color: var(--text-primary);
+    font-size: 1rem;
+    font-family: inherit;
+    transition: all var(--transition-fast);
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.pl-10 {
+    padding-left: 2.5rem;
+}
+
+.select-field:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.select-field:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    background-color: rgba(15, 23, 42, 0.6);
+}
+
+.select-field option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.select-error {
+    border-color: var(--danger);
+}
+
+.select-error:focus {
+    border-color: var(--danger);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.select-error-msg {
+    font-size: 0.75rem;
+    color: var(--danger);
+    margin-top: 0.25rem;
+    text-align: left;
+}
+
+.text-muted {
+    color: var(--text-muted);
+}
