@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Trash2, LogOut, Database, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, LogOut, Database, AlertCircle, Upload, X } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Table } from '../components/Table';
 import { Modal } from '../components/Modal';
@@ -12,16 +12,24 @@ import './AdminDashboard.css';
 interface Question {
     id: string;
     title: string;
-    topic: string;
+    topics: string[];
     difficulty: 'easy' | 'medium' | 'hard';
+    description?: string;
+    mediaUrl?: string;
 }
 
 const INITIAL_QUESTIONS: Question[] = [
-    { id: '1', title: 'Two Sum', topic: 'Arrays', difficulty: 'easy' },
-    { id: '2', title: 'Reverse Linked List', topic: 'Linked List', difficulty: 'easy' },
-    { id: '3', title: 'Container With Most Water', topic: 'Two Pointers', difficulty: 'medium' },
-    { id: '4', title: 'LRU Cache', topic: 'Design', difficulty: 'medium' },
-    { id: '5', title: 'Merge K Sorted Lists', topic: 'Linked List', difficulty: 'hard' },
+    { id: '1', title: 'Two Sum', topics: ['Arrays', 'Hash Table'], difficulty: 'easy' },
+    { id: '2', title: 'Reverse Linked List', topics: ['Linked List'], difficulty: 'easy' },
+    { id: '3', title: 'Container With Most Water', topics: ['Two Pointers', 'Arrays'], difficulty: 'medium' },
+    { id: '4', title: 'LRU Cache', topics: ['Design', 'Hash Table', 'Linked List'], difficulty: 'medium' },
+    { id: '5', title: 'Merge K Sorted Lists', topics: ['Linked List', 'Divide and Conquer', 'Heap'], difficulty: 'hard' },
+];
+
+const AVAILABLE_TOPICS = [
+    'Arrays', 'Strings', 'Linked List', 'Trees', 'Graphs',
+    'Dynamic Programming', 'Math', 'Sorting', 'Hash Table',
+    'Two Pointers', 'Binary Search', 'Design', 'Heap', 'Divide and Conquer'
 ];
 
 export const AdminDashboard: React.FC = () => {
@@ -36,21 +44,23 @@ export const AdminDashboard: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState<Omit<Question, 'id'>>({
         title: '',
-        topic: '',
+        topics: [],
         difficulty: 'easy',
+        description: '',
+        mediaUrl: '',
     });
     const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
 
     // --- Handlers ---
     const handleOpenCreate = () => {
         setEditingId(null);
-        setFormData({ title: '', topic: '', difficulty: 'easy' });
+        setFormData({ title: '', topics: [], difficulty: 'easy', description: '', mediaUrl: '' });
         setIsFormModalOpen(true);
     };
 
     const handleOpenEdit = (q: Question) => {
         setEditingId(q.id);
-        setFormData({ title: q.title, topic: q.topic, difficulty: q.difficulty });
+        setFormData({ title: q.title, topics: [...q.topics], difficulty: q.difficulty, description: q.description || '', mediaUrl: q.mediaUrl || '' });
         setIsFormModalOpen(true);
     };
 
@@ -59,8 +69,36 @@ export const AdminDashboard: React.FC = () => {
         setIsDeleteModalOpen(true);
     };
 
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const url = URL.createObjectURL(file);
+            setFormData(prev => ({ ...prev, mediaUrl: url }));
+        }
+    };
+
+    const handleRemoveMedia = () => {
+        setFormData(prev => ({ ...prev, mediaUrl: '' }));
+    };
+
+    const handleTopicSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedTopic = e.target.value;
+        if (selectedTopic && !formData.topics.includes(selectedTopic)) {
+            setFormData(prev => ({ ...prev, topics: [...prev.topics, selectedTopic] }));
+        }
+        // Reset the select dropdown
+        e.target.value = '';
+    };
+
+    const handleRemoveTopic = (topicToRemove: string) => {
+        setFormData(prev => ({
+            ...prev,
+            topics: prev.topics.filter(t => t !== topicToRemove)
+        }));
+    };
+
     const handleSaveQuestion = () => {
-        if (!formData.title || !formData.topic) return;
+        if (!formData.title || formData.topics.length === 0) return;
 
         if (editingId) {
             // Update
@@ -94,9 +132,15 @@ export const AdminDashboard: React.FC = () => {
             cell: (item: Question) => <span className="font-medium text-primary">{item.title}</span>,
         },
         {
-            header: 'Topic',
-            accessorKey: 'topic' as const,
-            cell: (item: Question) => <span className="tag-sm custom-tag text-accent">{item.topic}</span>,
+            header: 'Topics',
+            accessorKey: 'topics' as const,
+            cell: (item: Question) => (
+                <div className="flex flex-wrap gap-1">
+                    {item.topics.map(topic => (
+                        <span key={topic} className="tag-sm custom-tag text-accent">{topic}</span>
+                    ))}
+                </div>
+            ),
         },
         {
             header: 'Difficulty',
@@ -184,13 +228,45 @@ export const AdminDashboard: React.FC = () => {
                         value={formData.title}
                         onChange={e => setFormData({ ...formData, title: e.target.value })}
                     />
-                    <Input
-                        label="Topic Category"
-                        placeholder="e.g. Arrays, Trees, Dynamic Programming"
-                        value={formData.topic}
-                        onChange={e => setFormData({ ...formData, topic: e.target.value })}
-                        className="mt-4"
-                    />
+
+                    <div className="form-group">
+                        <label className="form-label">Description</label>
+                        <textarea
+                            className="textarea-input"
+                            placeholder="Provide a detailed description of the problem..."
+                            value={formData.description || ''}
+                            onChange={e => setFormData({ ...formData, description: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="form-group">
+                        <label className="form-label">Topics</label>
+                        <Select
+                            options={[
+                                { value: '', label: 'Select a topic...' },
+                                ...AVAILABLE_TOPICS.map(t => ({ value: t, label: t }))
+                            ]}
+                            onChange={handleTopicSelect}
+                            value=""
+                        />
+                        {formData.topics.length > 0 && (
+                            <div className="selected-topics-container">
+                                {formData.topics.map(topic => (
+                                    <div key={topic} className="selected-topic-tag">
+                                        <span>{topic}</span>
+                                        <button
+                                            type="button"
+                                            className="topic-remove-btn"
+                                            onClick={() => handleRemoveTopic(topic)}
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     <Select
                         label="Difficulty Level"
                         value={formData.difficulty}
@@ -202,6 +278,29 @@ export const AdminDashboard: React.FC = () => {
                         ]}
                         className="mt-4"
                     />
+
+                    <div className="form-group">
+                        <label className="form-label">Media / Photos (Optional)</label>
+                        {!formData.mediaUrl ? (
+                            <div className="media-upload-container">
+                                <input
+                                    type="file"
+                                    accept="image/*,video/*"
+                                    className="media-upload-input"
+                                    onChange={handleFileUpload}
+                                />
+                                <Upload className="h-8 w-8 text-accent mx-auto mb-2 opacity-80" />
+                                <p className="text-sm text-secondary">Click or drag file to upload</p>
+                            </div>
+                        ) : (
+                            <div className="media-preview-wrapper">
+                                <img src={formData.mediaUrl} alt="Uploaded Media" className="media-preview" />
+                                <button className="remove-media-btn" onClick={handleRemoveMedia} title="Remove Media">
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </Modal>
 
