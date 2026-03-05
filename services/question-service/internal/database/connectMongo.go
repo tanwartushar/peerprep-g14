@@ -14,7 +14,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-func ConnectMongo() *mongo.Client {
+var Client *mongo.Client
+
+func ConnectMongo() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
@@ -50,7 +52,7 @@ func ConnectMongo() *mongo.Client {
 	// 	}
 	// }()
 
-	return client
+	Client = client
 
 	// database := "questionTestcaseDB"
 	// question_col := "testcase_collection"

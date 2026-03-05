@@ -16,6 +16,8 @@ import (
 	// "golang.org/x/text/cases"
 )
 
+type QuestionService struct{}
+
 var quest_col string = "question_collection"
 var test_col string = "testcase_collection"
 
@@ -52,7 +54,7 @@ func NewTopicStore() *TopicStore {
     }
 }
 
-type question struct {
+type Question struct {
 	Question_title       string		//`bson:"question_title,omitempty"`
 	Question_description string		//`bson:"question_description,omitempty"`
 	Difficulty_level     string		//`bson:"difficulty_level,omitempty"`
@@ -105,8 +107,8 @@ func validateTopics(input []string, ts *TopicStore) ([]string, error) {
     return result, nil
 }
 
-func initQuestion() question{
-	var quest_struct question
+func initQuestion() Question{
+	var quest_struct Question
 	quest_struct.Question_title = ""
 	quest_struct.Question_description = ""
 	quest_struct.Difficulty_level = ""
@@ -115,20 +117,20 @@ func initQuestion() question{
 	return quest_struct
 }
 
-func CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) {
+func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
 	doc := initQuestion()
 	topicstore := NewTopicStore()
 	// validateTitle(title)
 	validatedLevel, err := validateDifficulty(diff)
 	if err != nil {
 		fmt.Println("Validation Error:", err)
-        return // Stop execution if the difficulty is invalid
+        return nil, err// Stop execution if the difficulty is invalid
     }
 
 	validatedTopics, err := validateTopics(topics, topicstore)
 	if err != nil {
 		fmt.Println("Validation Error:", err)
-        return // Stop execution if the difficulty is invalid
+        return nil, err// Stop execution if the difficulty is invalid
     }
 
 	doc.Question_title = *title
@@ -148,7 +150,9 @@ func CreateQuestion(title *string, desc *string, diff string, topics []string, c
 	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
 	result, err := question_coll.InsertOne(context.TODO(), doc)
 	if err != nil {
-		panic(err)
+		// panic(err)
+		return nil, err
 	}
 	fmt.Printf("Inserted document with _id: %v\n", result.InsertedID)
+	return result.InsertedID, nil
 }
