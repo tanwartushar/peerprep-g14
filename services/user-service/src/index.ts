@@ -35,7 +35,7 @@ app.get('/user/auth/github', (req, res) => {
   const rootUrl = 'https://github.com/login/oauth/authorize';
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: 'http://localhost:3001/user/auth/github/callback',
+    redirect_uri: 'http://localhost:5173/dashboard',
     scope: 'user:email', // Request permission to see their email
   };
   
