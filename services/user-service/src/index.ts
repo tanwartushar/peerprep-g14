@@ -31,10 +31,11 @@ app.get('/user', (req: Request, res: Response) => {
 });
 
 app.get('/user/auth/github', (req, res) => {
+  console.log('Initiating GitHub OAuth flow');
   const rootUrl = 'https://github.com/login/oauth/authorize';
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: 'http://localhost:3001/api/auth/github/callback',
+    redirect_uri: 'http://localhost:3001/user/auth/github/callback',
     scope: 'user:email', // Request permission to see their email
   };
   
