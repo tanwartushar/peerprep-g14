@@ -30,7 +30,7 @@ app.listen(PORT, () => {
 });
 
 // A sample route
-app.get('/user', (req: Request, res: Response) => {
+app.get('/user/hello', (req: Request, res: Response) => {
   res.send('TypeScript Backend is running! 🚀');
 });
 
@@ -105,8 +105,8 @@ app.get('/user/user/login', async (req, res) => {
       },
     });
 
-    const accessToken = jwt.sign({ userId: user.id }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ userId: user.id }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
+    const accessToken = jwt.sign({ userId: user.id, role: 'user' }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ userId: user.id, role: 'user' }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
 
     const token = await prisma.user_refresh_token.create({
       data: {
