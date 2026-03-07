@@ -1,15 +1,18 @@
 // src/lib/prisma.ts
 import pg from 'pg';
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+
+dotenv.config();
 
 const connectionString = process.env.DATABASE_URL;
 
 const pool = new pg.Pool({ 
   connectionString,
-  max: 20, // Max number of concurrent connections in the pool
-  idleTimeoutMillis: 30000, // How long a connection can sit idle before closing
-  connectionTimeoutMillis: 2000, // How long to wait for a connection before failing
+  max: 2, // Reduced slightly to play nice with Supabase free tier limits
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000, // Increased to 5s to handle cold starts
 });
 
 const adapter = new PrismaPg(pool);
