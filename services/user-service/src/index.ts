@@ -2,7 +2,10 @@
 import express, { type Request, type Response, type Application } from 'express';
 import cors, { type CorsOptions } from 'cors';
 import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+
 import prisma from './prisma.js';
+
 
 dotenv.config();
 
@@ -18,7 +21,7 @@ const corsOptions: CorsOptions = {
 };
 
 app.use(cors(corsOptions));
-  
+
 // Middleware to parse JSON bodies
 app.use(express.json());
 
@@ -37,10 +40,10 @@ app.get('/user/auth/github', (req, res) => {
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
     // IMPORTANT: This must match what is registered in GitHub Developer Settings
-    redirect_uri: 'http://localhost/user/user/login', 
+    redirect_uri: 'http://localhost/user/user/login',
     scope: 'user:email',
   };
-  
+
   const queryString = new URLSearchParams(options).toString();
   res.redirect(`${rootUrl}?${queryString}`);
 });
@@ -59,7 +62,7 @@ app.get('/user/user/login', async (req, res) => {
         code
       })
     });
-    
+
     const { access_token } = await tokenResponse.json();
 
     // 2. Get General Profile (contains 'name')
@@ -102,7 +105,30 @@ app.get('/user/user/login', async (req, res) => {
       },
     });
 
+    const accessToken = jwt.sign({ userId: user.id }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ userId: user.id }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
+
+    const token = await prisma.user_refresh_token.create({
+      data: {
+        userId: user.id,
+        token_hash: refreshToken, // Remember to hash this first!
+        expire_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiry
+      }
+    });
+
     console.log(`Authenticated: Userid:${user.id} Name:${user.name} Email:${user.email}`);
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,    // Prevents JavaScript from accessing the cookie (No XSS)
+      sameSite: 'lax', // Prevents the cookie from being sent in cross-site requests (No CSRF)
+      maxAge: 15 * 60 * 1000 // 15 minutes in milliseconds
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+    });
 
     // Redirect back to frontend with the info
     res.redirect(`http://localhost/dashboard?userId=${user.id}`);
