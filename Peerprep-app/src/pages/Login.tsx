@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User} from 'lucide-react';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -12,18 +12,60 @@ export const Login: React.FC = () => {
     const [isAdminMode, setIsAdminMode] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // --- ADD THESE STATES ---
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+
+    // This is for user login with github
+    const handleLogin = () => {
+        window.location.href = 'http://localhost:3001/user/auth/github';
+    };
+
+    // This is for admin login only. The code is WRONG.
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setIsLoading(false);
-            if (isAdminMode) {
+
+        // Determine which endpoint to call
+        const endpoint = isLogin
+            ? 'http://localhost:3001/api/auth/github' // For GitHub OAuth login
+            : 'http://localhost:3001/api/auth/register';
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email,
+                    password,
+                    ...(isLogin ? {} : { name }) // Only send name if registering
+                }),
+            });
+
+            const data = await response.json();
+
+            console.log('API Response:', data); // Debugging log
+            if (!response.ok) {
+                throw new Error(data.message || 'Authentication failed');
+            }
+
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+            }
+
+            // PeerPrep logic: Redirect based on admin status
+            if (data.isAdmin || isAdminMode) {
                 navigate('/admin');
             } else {
                 navigate('/dashboard');
             }
-        }, 1000);
+
+        } catch (error: any) {
+            alert(error.message);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -70,39 +112,63 @@ export const Login: React.FC = () => {
                     </div>
 
                     <form onSubmit={handleSubmit} className="login-form">
-                        {!isLogin && !isAdminMode && (
-                            <Input
-                                label="Full Name"
-                                placeholder="John Doe"
-                                leftIcon={<User className="h-5 w-5" />}
-                                required
-                            />
+                        {isAdminMode && (
+                            <>
+                                <Input
+                                    label="Full Name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="John Doe"
+                                    leftIcon={<User className="h-5 w-5" />}
+                                    required
+                                />
+                                <Input
+                                    label="Email Address"
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder={isAdminMode ? "admin@peerprep.com" : "you@example.com"}
+                                    leftIcon={<Mail className="h-5 w-5" />}
+                                    required
+                                />
+                                <Input
+                                    label="Password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="••••••••"
+                                    leftIcon={<Lock className="h-5 w-5" />}
+                                    required
+                                />
+                                <Button
+                                    type="submit"
+                                    size="lg"
+                                    className="w-full mt-4"
+                                    isLoading={isLoading}
+                                    variant={isAdminMode ? 'secondary' : 'primary'}
+                                >
+                                    {isLogin ? (isAdminMode ? 'Admin Sign In' : 'Sign In') : 'Create Account'}
+                                </Button>
+                            </>
                         )}
-                        <Input
-                            label="Email Address"
-                            type="email"
-                            placeholder={isAdminMode ? "admin@peerprep.com" : "you@example.com"}
-                            leftIcon={<Mail className="h-5 w-5" />}
-                            required
-                        />
-                        <Input
-                            label="Password"
-                            type="password"
-                            placeholder="••••••••"
-                            leftIcon={<Lock className="h-5 w-5" />}
-                            required
-                        />
 
-                        <Button
-                            type="submit"
-                            size="lg"
-                            className="w-full mt-4"
-                            isLoading={isLoading}
-                            variant={isAdminMode ? 'secondary' : 'primary'}
-                            rightIcon={!isLoading ? <ArrowRight className="h-5 w-5" /> : undefined}
-                        >
-                            {isLogin ? (isAdminMode ? 'Admin Sign In' : 'Sign In') : 'Create Account'}
-                        </Button>
+                        {!isAdminMode && (
+                            <div className="github-login-container animate-fade-in">
+                                <Button
+                                    type="button" // Important: prevents handleSubmit from firing
+                                    onClick={handleLogin} // Your window.location.href function
+                                    size="lg"
+                                    className="w-full flex items-center justify-center gap-2"
+                                    variant="primary"
+                                >
+                                    {/* If you have a Github icon from lucide-react, add it here */}
+                                    <span>Sign in with GitHub</span>
+                                </Button>
+                                <p className="mt-4 text-xs text-center text-secondary">
+                                    Secure login provided by GitHub OAuth
+                                </p>
+                            </div>
+                        )}
                     </form>
 
                     {!isAdminMode && (
