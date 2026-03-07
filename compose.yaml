@@ -23,8 +23,6 @@ services:
     build:
       context: ./Peerprep-app           # Path to your frontend folder
       dockerfile: Dockerfile.dev
-    ports:
-      - "5173:5173"
     develop:
       watch:
         - action: sync
@@ -36,24 +34,18 @@ services:
     build:
       context: ./services/user-service      # Path to your user service folder
       dockerfile: Dockerfile
-    ports:
-      - "3001:3001"                # Map to a unique port
 
   # --- SERVICE 2 (e.g., Matching Service) ---
   # matching-service:
   #   build:
   #     context: ./matching-service
   #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3002:3002"
 
   # --- SERVICE 3 (e.g., Question Service) ---
   # question-service:
   #   build:
   #     context: ./services/question-service
   #     dockerfile: Dockerfile
-  #   ports:
-  #     - "3003:3003"
 
   # # --- OPTIONAL: DATABASE ---
   # db:

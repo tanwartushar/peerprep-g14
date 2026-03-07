@@ -19,7 +19,7 @@ export const Login: React.FC = () => {
 
     // This is for user login with github
     const handleLogin = () => {
-        window.location.href = 'http://localhost:3001/user/auth/github';
+        window.location.href = 'http://localhost/user/auth/github';
     };
 
     // This is for admin login only. The code is WRONG.
