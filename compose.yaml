@@ -18,6 +18,18 @@ services:
       - frontend
       - user-service
 
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: sync
+          path: ./services/auth-service/src
+          target: /app/src   # Changed from /app to /app/src
+        - action: rebuild
+          path: ./services/auth-service/package.json
+
   # --- FRONTEND SERVICE ---
   frontend:
     build:
@@ -34,6 +46,13 @@ services:
     build:
       context: ./services/user-service      # Path to your user service folder
       dockerfile: Dockerfile
+    develop:
+      watch:
+        - action: sync
+          path: ./services/user-service/src
+          target: /app/src   # Changed from /app to /app/src
+        - action: rebuild
+          path: ./services/user-service/package.json
 
   # --- SERVICE 2 (e.g., Matching Service) ---
   # matching-service:

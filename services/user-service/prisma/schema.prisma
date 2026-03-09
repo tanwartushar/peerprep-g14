@@ -20,4 +20,14 @@ model User {
   providerId    String   @unique // The ID sent back by GitHub/Google
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  refreshTokens       User_refresh_token[]
+}
+
+model User_refresh_token {
+  id            String   @id @default(uuid())
+  userId        String   // The foreign key
+  token_hash    String  @unique
+  expire_at     DateTime
+  created_at    DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
