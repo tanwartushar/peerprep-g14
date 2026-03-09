@@ -17,6 +17,7 @@ const PORT = process.env.PORT || 3000;
 const verifyGateway = async (req: any, res: any, next: any) => {
   const { accessToken, refreshToken } = req.cookies;
 
+  console.log('Gateway Middleware Triggered');
   // 1. Valid Access Token exists? Easy path.
   if (accessToken) {
     try {

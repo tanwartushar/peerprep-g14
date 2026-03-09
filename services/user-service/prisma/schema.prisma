@@ -16,11 +16,18 @@ model User {
   id            String   @id @default(uuid())
   email         String   @unique
   name          String?
-  authProvider  String   // e.g., "github" or "google"
-  providerId    String   @unique // The ID sent back by GitHub/Google
+  role          String   @default("USER") // Add this to distinguish ADMIN vs USER
+
+  // Password for Admins (Optional for OAuth users)
+  password      String?  
+
+  // OAuth Fields (Optional for Admin users)
+  authProvider  String?  
+  providerId    String?  @unique 
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  refreshTokens       User_refresh_token[]
+  refreshTokens User_refresh_token[]
 }
 
 model User_refresh_token {
