@@ -15,57 +15,45 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware to verify JWT
 const verifyGateway = async (req: any, res: any, next: any) => {
-  const accessToken = req.cookies.accessToken;
-  const refreshToken = req.cookies.refreshToken; // Assuming you stored it in a cookie too
+  const { accessToken, refreshToken } = req.cookies;
 
-  // 1. If no access token, but we have a refresh token, try to refresh immediately
-  if (!accessToken && refreshToken) {
-    return await handleRefresh(req, res, next);
-  }
-
-  if (!accessToken) {
-    return res.status(401).json({ message: "No token provided" });
-  }
-
-  try {
-    const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string };
-    req.headers['x-user-id'] = decoded.userId;
-    next();
-  } catch (err: any) {
-    // 2. If token expired, try to refresh
-    if (err.name === 'TokenExpiredError' && refreshToken) {
-      return await handleRefresh(req, res, next);
+  // 1. Valid Access Token exists? Easy path.
+  if (accessToken) {
+    try {
+      const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string };
+      req.headers['x-user-id'] = decoded.userId;
+      return next();
+    } catch (err: any) {
+      if (err.name !== 'TokenExpiredError') {
+        return res.status(401).json({ message: "Invalid token" });
+      }
+      // If it's just expired, fall through to refresh logic below
     }
-    return res.status(401).json({ message: "Invalid token" });
   }
-};
 
-const handleRefresh = async (req: any, res: any, next: any) => {
-  const refreshToken = req.cookies.refreshToken;
+  // 2. Refresh Logic
+  if (refreshToken) {
+    try {
+      // Call User Service - It returns JSON, NOT a cookie
+      const response = await axios.post('http://user-service:3001/auth/refresh', {
+        refreshToken 
+      });
 
-  try {
-    // 3. Call your User Service internal refresh endpoint
-    // Use the Docker service name 'user-service'
-    const response = await axios.post('http://user-service:3001/auth/refresh', {
-      refreshToken: refreshToken
-    });
+      const { newAccessToken, userId } = response.data;
 
-    const { newAccessToken, userId } = response.data;
+      // 3. SET THE COOKIE HERE (On the actual response going to user)
+      res.cookie('accessToken', newAccessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 15 * 60 * 1000 
+      });
 
-    // 4. Set the new access token in the user's browser
-    res.cookie('accessToken', newAccessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 15 * 60 * 1000 // 15 mins
-    });
-
-    // 5. Inject the userId and move to the next middleware/proxy
-    req.headers['x-user-id'] = userId;
-    next();
-  } catch (error) {
-    // If refresh token is also invalid/expired, user MUST log in again
-    return res.status(401).json({ message: "Session expired, please login again" });
+      req.headers['x-user-id'] = userId;
+      return next();
+    } catch (refreshErr) {
+      return res.status(401).json({ message: "Session expired" });
+    }
   }
 };
 

@@ -2,7 +2,9 @@
 import express, { type Request, type Response, type Application } from 'express';
 import cors, { type CorsOptions } from 'cors';
 import dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 import prisma from './prisma.js';
 
@@ -21,6 +23,7 @@ const corsOptions: CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+app.use(cookieParser());
 
 // Middleware to parse JSON bodies
 app.use(express.json());
@@ -108,10 +111,12 @@ app.get('/user/user/login', async (req, res) => {
     const accessToken = jwt.sign({ userId: user.id, role: 'user' }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
     const refreshToken = jwt.sign({ userId: user.id, role: 'user' }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
 
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
     const token = await prisma.user_refresh_token.create({
       data: {
         userId: user.id,
-        token_hash: refreshToken, // Remember to hash this first!
+        token_hash: tokenHash,
         expire_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days expiry
       }
     });
@@ -135,5 +140,58 @@ app.get('/user/user/login', async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ error: `Failed to retrieve user data + ${JSON.stringify(err)}` });
+  }
+});
+
+app.post('/auth/refresh', async (req, res) => {
+  // 1. Get the raw JWT from the HttpOnly cookie
+  const rawRefreshToken = req.cookies?.refreshToken;
+
+  if (!rawRefreshToken) {
+    return res.status(401).json({ message: 'Refresh token missing' });
+  }
+
+  try {
+    // 2. Hash the incoming token to prepare for DB lookup
+    const incomingHash = crypto
+      .createHash('sha256')
+      .update(rawRefreshToken)
+      .digest('hex');
+
+    // 3. Find the hash in Prisma
+    const storedToken = await prisma.user_refresh_token.findUnique({
+      where: { token_hash: incomingHash },
+    });
+
+    // Check if token exists or has expired in your DB
+    if (!storedToken || storedToken.expire_at < new Date()) {
+      return res.status(403).json({ message: 'Token revoked or expired' });
+    }
+
+    // 4. Verify the JWT signature and expiration
+    // We do this after the DB check to avoid unnecessary CPU work if the hash is missing
+    const payload = jwt.verify(
+      rawRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET as string
+    ) as { userId: string, role: string };
+
+    if (payload.userId !== storedToken.userId) {
+      return res.status(403).json({ message: 'Token user mismatch' });
+    }
+
+    // 5. Generate a fresh Access Token
+    const accessToken = jwt.sign(
+      { userId: payload.userId, role: payload.role },
+      process.env.ACCESS_TOKEN_SECRET as string,
+      { expiresIn: '15m' }
+    );
+
+    return res.json({
+      newAccessToken: accessToken,
+      userId: payload.userId
+    });
+  } catch (error) {
+    console.error('Refresh Error:', error);
+    return res.status(403).json({ message: 'Invalid refresh token' });
   }
 });
