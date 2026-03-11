@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, User} from 'lucide-react';
+import { Mail, Lock, User } from 'lucide-react';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
@@ -28,9 +28,7 @@ export const Login: React.FC = () => {
         setIsLoading(true);
 
         // Determine which endpoint to call
-        const endpoint = isLogin
-            ? 'http://localhost:3001/api/auth/github' // For GitHub OAuth login
-            : 'http://localhost:3001/api/auth/register';
+        const endpoint = 'http://localhost/user/admin/login';
 
         try {
             const response = await fetch(endpoint, {
@@ -38,8 +36,7 @@ export const Login: React.FC = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     email,
-                    password,
-                    ...(isLogin ? {} : { name }) // Only send name if registering
+                    password
                 }),
             });
 
@@ -48,10 +45,6 @@ export const Login: React.FC = () => {
             console.log('API Response:', data); // Debugging log
             if (!response.ok) {
                 throw new Error(data.message || 'Authentication failed');
-            }
-
-            if (data.token) {
-                localStorage.setItem('token', data.token);
             }
 
             // PeerPrep logic: Redirect based on admin status
@@ -114,14 +107,6 @@ export const Login: React.FC = () => {
                     <form onSubmit={handleSubmit} className="login-form">
                         {isAdminMode && (
                             <>
-                                <Input
-                                    label="Full Name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                    placeholder="John Doe"
-                                    leftIcon={<User className="h-5 w-5" />}
-                                    required
-                                />
                                 <Input
                                     label="Email Address"
                                     type="email"
