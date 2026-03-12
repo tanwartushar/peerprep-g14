@@ -10,8 +10,9 @@ export const Login: React.FC = () => {
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+    // --- ADD THESE STATES ---
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
 
   // This is for user login with github
   const handleLogin = () => {

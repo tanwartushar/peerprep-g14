@@ -26,7 +26,7 @@ services:
       watch:
         - action: sync
           path: ./services/auth-service/src
-          target: /app/src # Changed from /app to /app/src
+          target: /usr/src/app/src   # Changed from /app to /usr/src/app/src
         - action: rebuild
           path: ./services/auth-service/package.json
 
@@ -52,7 +52,7 @@ services:
       watch:
         - action: sync
           path: ./services/user-service/src
-          target: /app/src # Changed from /app to /app/src
+          target: /usr/src/app/src   # Changed from /app to /usr/src/app/src
         - action: rebuild
           path: ./services/user-service/package.json
 

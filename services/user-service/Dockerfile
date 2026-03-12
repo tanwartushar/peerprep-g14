@@ -12,6 +12,9 @@ RUN npm install
 # Bundle app source
 COPY . .
 
+# Generate Prisma Client for the alpine linux environment
+RUN npx prisma generate
+
 # Expose port
 EXPOSE 3001
 
