@@ -33,9 +33,9 @@
   padding: 0.625rem 1rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  background-color: var(--color-light-gray);
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  background-color: rgba(15, 23, 42, 0.4);
+  color: var(--text-primary);
+  font-size: 1rem;
   font-family: inherit;
   transition: all var(--transition-fast);
   outline: none;
@@ -46,7 +46,7 @@
 }
 
 .input-field::placeholder {
-  color: var(--color-gray);
+  color: var(--text-muted);
 }
 
 .input-field:hover {
@@ -56,7 +56,7 @@
 .input-field:focus {
   border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-  background-color: var(--accent-glow);
+  background-color: rgba(15, 23, 42, 0.6);
 }
 
 .input-error {

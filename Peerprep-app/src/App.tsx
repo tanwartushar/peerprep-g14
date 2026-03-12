@@ -1,16 +1,21 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Matching } from './pages/Matching';
-import { Workspace } from './pages/Workspace';
-import { AdminDashboard } from './pages/AdminDashboard';
-import './App.css';
+import React, { useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { Login } from "./pages/Login";
+import { Dashboard } from "./pages/Dashboard";
+import { Matching } from "./pages/Matching";
+import { Workspace } from "./pages/Workspace";
+import { AdminDashboard } from "./pages/AdminDashboard";
+import "./App.css";
 
 const App: React.FC = () => {
   // Adding a simple effect to log that the app initialized successfully
   useEffect(() => {
-    console.log('PeerPrep Frontend Initialized - Powered by React & Vite');
+    console.log("PeerPrep Frontend Initialized - Powered by React & Vite");
   }, []);
 
   return (
