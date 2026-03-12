@@ -11,7 +11,7 @@ services:
   gateway:
     image: nginx:alpine
     ports:
-      - "80:80"  # You visit http://localhost in your browser
+      - "80:80" # You visit http://localhost in your browser
     volumes:
       - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -32,19 +32,21 @@ services:
 
   # --- FRONTEND SERVICE ---
   frontend:
+    ports:
+      - "5173:5173"
     build:
-      context: ./Peerprep-app           # Path to your frontend folder
+      context: ./Peerprep-app # Path to your frontend folder
       dockerfile: Dockerfile.dev
     develop:
       watch:
         - action: sync
-          path: ./Peerprep-app         # Watch only frontend changes
-          target: /app
+          path: ./Peerprep-app # Watch only frontend changes
+          target: /Peerprep-app
 
   # --- USER SERVICE ---
   user-service:
     build:
-      context: ./services/user-service      # Path to your user service folder
+      context: ./services/user-service # Path to your user service folder
       dockerfile: Dockerfile
     develop:
       watch:
