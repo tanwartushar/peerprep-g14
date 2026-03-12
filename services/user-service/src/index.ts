@@ -88,27 +88,32 @@ app.get('/user/user/login', async (req, res) => {
     const name = userData.name || userData.login; // Fallback to username if name is blank
     const email = primaryEmail;
 
-    const user = await prisma.user.upsert({
-      where: {
-        email: email,
-      },
-      update: {
-        // If they already exist, update their email/name in case they changed it on GitHub
-        email: email,
-        name: name,
-        updatedAt: new Date(),
-      },
-      create: {
-        // If they don't exist, Prisma creates a new record and generates a new UUID 'id'
-        email: email,
-        name: name,
-        authProvider: 'github',
-        providerId: userData.id.toString(), // Store GitHub's unique user ID for reference
-      },
+    // Find if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email },
     });
 
-    const accessToken = jwt.sign({ userId: user.id, role: 'USER' }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
-    const refreshToken = jwt.sign({ userId: user.id, role: 'USER' }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
+    let user;
+    let isNewUser = false;
+
+    if (!existingUser) {
+      // Brand new user, create them and flag them
+      user = await prisma.user.create({
+        data: {
+          email: email,
+          name: name,
+          authProvider: 'github',
+          providerId: userData.id.toString(),
+        },
+      });
+      isNewUser = true;
+    } else {
+      user = existingUser;
+      isNewUser = false;
+    }
+
+    const accessToken = jwt.sign({ userId: user.id, role: user.role }, process.env.ACCESS_TOKEN_SECRET as string, { expiresIn: '15m' });
+    const refreshToken = jwt.sign({ userId: user.id, role: user.role }, process.env.REFRESH_TOKEN_SECRET as string, { expiresIn: '7d' });
 
     const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
@@ -120,7 +125,7 @@ app.get('/user/user/login', async (req, res) => {
       }
     });
 
-    console.log(`Authenticated: Userid:${user.id} Name:${user.name} Email:${user.email}`);
+    console.log(`Authenticated: Userid:${user.id} Name:${user.name} Email:${user.email} IsNewUser:${isNewUser}`);
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,    // Prevents JavaScript from accessing the cookie (No XSS)
@@ -134,11 +139,41 @@ app.get('/user/user/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
     });
 
-    // Redirect back to frontend with the info
-    res.redirect(`http://localhost/dashboard?userId=${user.id}`);
+    // Redirect back to frontend
+    // Use the port Vite runs on (5173 by default)
+    if (isNewUser) {
+      res.redirect(`http://localhost/profile-setup?userId=${user.id}`);
+    } else {
+      res.redirect(`http://localhost/dashboard`);
+    }
 
   } catch (err) {
-    res.status(500).json({ error: `Failed to retrieve user data + ${JSON.stringify(err)}` });
+    console.error('GitHub OAuth Login Error:', err);
+    res.status(500).json({ error: `Failed to retrieve user data: ${(err as Error).message}`, details: err });
+  }
+});
+
+app.put('/api/user/profile', async (req, res) => {
+  const userId = req.body.userId; // Alternatively read from authenticated session/cookie
+  const { bio, experienceLevel } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ message: "userId is required" });
+  }
+
+  try {
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        bio,
+        experienceLevel,
+      },
+    });
+
+    res.status(200).json({ message: "Profile updated successfully", user: updatedUser });
+  } catch (error) {
+    console.error("Profile Setup Error:", error);
+    res.status(500).json({ message: "Failed to update profile", error });
   }
 });
 
@@ -238,7 +273,7 @@ app.post('/auth/refresh', async (req, res) => {
 
     // 4. Verify the JWT signature and expiration
     // We do this after the DB check to avoid unnecessary CPU work if the hash is missing
-    const payload = jwt.verify(rawRefreshToken, process.env.REFRESH_TOKEN_SECRET as string ) as { userId: string, role: string };
+    const payload = jwt.verify(rawRefreshToken, process.env.REFRESH_TOKEN_SECRET as string) as { userId: string, role: string };
 
     if (payload.userId !== storedToken.userId) {
       return res.status(403).json({ message: 'Token user mismatch' });

@@ -18,6 +18,10 @@ model User {
   name          String?
   role          String   @default("USER") // Add this to distinguish ADMIN vs USER
 
+  // Profile fields (Optional)
+  bio               String?
+  experienceLevel   String?
+
   // Password for Admins (Optional for OAuth users)
   password      String?  
 

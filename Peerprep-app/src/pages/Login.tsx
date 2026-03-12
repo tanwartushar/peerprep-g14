@@ -15,7 +15,6 @@ export const Login: React.FC = () => {
     // --- ADD THESE STATES ---
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [name, setName] = useState('');
 
     // This is for user login with github
     const handleLogin = () => {

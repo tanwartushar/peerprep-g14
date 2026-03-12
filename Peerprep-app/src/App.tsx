@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Matching } from './pages/Matching';
 import { Workspace } from './pages/Workspace';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { ProfileSetup } from './pages/ProfileSetup';
 import './App.css';
 
 const App: React.FC = () => {
@@ -23,6 +24,7 @@ const App: React.FC = () => {
             <Route path="/matching" element={<Matching />} />
             <Route path="/workspace" element={<Workspace />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/profile-setup" element={<ProfileSetup />} />
             {/* Fallback route */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
