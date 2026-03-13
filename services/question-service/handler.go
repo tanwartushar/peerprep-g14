@@ -51,4 +51,83 @@ func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"question_id": questID})
 }
 
+func (h *Handler) GetQuestionsRequest(c *gin.Context) {
+	difficulty := c.Query("difficulty")
+	topic := c.Query("topic")
 
+	questions, err := h.QuestSvc.GetQuestions(difficulty, topic, database.Client)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch questions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, questions)
+}
+
+func (h *Handler) GetQuestionByIDRequest(c *gin.Context) {
+	id := c.Param("id")
+
+	question, err := h.QuestSvc.GetQuestionByID(id, database.Client)
+	if err != nil {
+		if err.Error() == "invalid ID format" || err.Error() == "question not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch question"})
+		return
+	}
+
+	c.JSON(http.StatusOK, question)
+}
+
+func (h *Handler) PutQuestionRequest(c *gin.Context) {
+	id := c.Param("id")
+
+	var questDoc struct {
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Difficulty  string   `json:"difficulty"`
+		Topics      []string `json:"topics"`
+	}
+
+	if err := c.ShouldBindJSON(&questDoc); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
+		return
+	}
+
+	err := h.QuestSvc.UpdateQuestion(
+		id,
+		&questDoc.Title,
+		&questDoc.Description,
+		questDoc.Difficulty,
+		questDoc.Topics,
+		database.Client,
+	)
+
+	if err != nil {
+		if err.Error() == "invalid ID format" || err.Error() == "question not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Question updated successfully"})
+}
+
+func (h *Handler) DeleteQuestionRequest(c *gin.Context) {
+	id := c.Param("id")
+
+	err := h.QuestSvc.DeleteQuestion(id, database.Client)
+	if err != nil {
+		if err.Error() == "invalid ID format" || err.Error() == "question not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Question not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete question"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
+}

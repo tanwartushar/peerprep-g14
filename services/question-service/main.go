@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	"github.com/tgonet/peerprep-g14/services/question-service/question/repository"
 )
 
 func main() {
@@ -21,7 +22,12 @@ func main() {
 	// initialize gin engine
 	r := gin.Default()
 
-	// basic health check route
+	// initialize controller handler
+	h := &Handler{
+		QuestSvc: &repository.QuestionService{},
+	}
+
+	// base routes
 	api := r.Group("/api/questions")
 	{
 		api.GET("/health", func(c *gin.Context) {
@@ -30,6 +36,12 @@ func main() {
 				"service": "question-service",
 			})
 		})
+
+		api.GET("/", h.GetQuestionsRequest)
+		api.GET("/:id", h.GetQuestionByIDRequest)
+		api.POST("/", h.PostCreateQuestionRequest)
+		api.PUT("/:id", h.PutQuestionRequest)
+		api.DELETE("/:id", h.DeleteQuestionRequest)
 	}
 
 	// start server on port 8080
