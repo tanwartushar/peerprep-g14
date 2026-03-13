@@ -131,3 +131,19 @@ func (h *Handler) DeleteQuestionRequest(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
 }
+
+// AdminOnly Middleware enforces that the requester has the 'ADMIN' role
+func AdminOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role := c.GetHeader("X-User-Role")
+		
+		if role != "ADMIN" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: You must be an admin to perform this action"})
+			c.Abort()
+			return
+		}
+		
+		// If they are an admin, proceed to the actual handler (like PostCreateQuestionRequest)
+		c.Next()
+	}
+}

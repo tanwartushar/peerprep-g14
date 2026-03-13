@@ -39,9 +39,15 @@ func main() {
 
 		api.GET("/", h.GetQuestionsRequest)
 		api.GET("/:id", h.GetQuestionByIDRequest)
-		api.POST("/", h.PostCreateQuestionRequest)
-		api.PUT("/:id", h.PutQuestionRequest)
-		api.DELETE("/:id", h.DeleteQuestionRequest)
+
+		// Admin-only mutation routes
+		adminApi := api.Group("/")
+		adminApi.Use(AdminOnly())
+		{
+			adminApi.POST("/", h.PostCreateQuestionRequest)
+			adminApi.PUT("/:id", h.PutQuestionRequest)
+			adminApi.DELETE("/:id", h.DeleteQuestionRequest)
+		}
 	}
 
 	// start server on port 8080
