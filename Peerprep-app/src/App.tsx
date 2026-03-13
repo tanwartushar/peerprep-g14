@@ -10,6 +10,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Matching } from "./pages/Matching";
 import { Workspace } from "./pages/Workspace";
 import { AdminDashboard } from "./pages/AdminDashboard";
+import { ProfileSetup } from "./pages/ProfileSetup";
 import "./App.css";
 
 const App: React.FC = () => {
