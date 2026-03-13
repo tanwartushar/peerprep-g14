@@ -55,12 +55,12 @@ func NewTopicStore() *TopicStore {
 }
 
 type Question struct {
-	Question_title       string		//`bson:"question_title,omitempty"`
-	Question_description string		//`bson:"question_description,omitempty"`
-	Difficulty_level     string		//`bson:"difficulty_level,omitempty"`
-	Related_topic        []string	//`bson:"related_topic,omitempty"`
-	Created_at           string
-	// image_url
+	ID          string   `json:"_id,omitempty" bson:"_id,omitempty"`
+	Title       string   `json:"title" bson:"title"`
+	Description string   `json:"description" bson:"description"`
+	Difficulty  string   `json:"difficulty" bson:"difficulty"`
+	Topics      []string `json:"topics" bson:"topics"`
+	CreatedAt   string   `json:"createdAt" bson:"createdAt"`
 }
 
 // Stringer inteface
@@ -109,11 +109,11 @@ func validateTopics(input []string, ts *TopicStore) ([]string, error) {
 
 func initQuestion() Question{
 	var quest_struct Question
-	quest_struct.Question_title = ""
-	quest_struct.Question_description = ""
-	quest_struct.Difficulty_level = ""
-	quest_struct.Related_topic = []string{}
-	quest_struct.Created_at = ""
+	quest_struct.Title = ""
+	quest_struct.Description = ""
+	quest_struct.Difficulty = ""
+	quest_struct.Topics = []string{}
+	quest_struct.CreatedAt = ""
 	return quest_struct
 }
 
@@ -133,18 +133,18 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
         return nil, err// Stop execution if the difficulty is invalid
     }
 
-	doc.Question_title = *title
-	doc.Question_description = *desc
-	doc.Difficulty_level = validatedLevel
-	doc.Related_topic = validatedTopics
-	doc.Created_at = time.Now().Format(time.DateTime)
+	doc.Title = *title
+	doc.Description = *desc
+	doc.Difficulty = validatedLevel
+	doc.Topics = validatedTopics
+	doc.CreatedAt = time.Now().Format(time.DateTime)
 	
 	fmt.Printf("Inserting: \n")
-	fmt.Printf("Title: %s\n", doc.Question_title)
-	fmt.Printf("Desc: %s\n", doc.Question_description)
-	fmt.Printf("Diff: %s\n", doc.Difficulty_level)
-	fmt.Printf("Topics: %s\n", doc.Related_topic)
-	fmt.Printf("createdAt: %s\n", doc.Created_at)
+	fmt.Printf("Title: %s\n", doc.Title)
+	fmt.Printf("Desc: %s\n", doc.Description)
+	fmt.Printf("Diff: %s\n", doc.Difficulty)
+	fmt.Printf("Topics: %s\n", doc.Topics)
+	fmt.Printf("createdAt: %s\n", doc.CreatedAt)
 
 	// client := database.ConnectMongo()
 	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)

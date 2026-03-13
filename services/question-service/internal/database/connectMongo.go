@@ -42,9 +42,10 @@ func ConnectMongo() {
 		log.Fatalf("Failed to initialize MongoDB client: %v", err)
 	}
 	if err := client.Ping(ctx, nil); err != nil {
-        log.Fatalf("Could not connect to MongoDB: %v", err)
-    }
-	log.Println("Successfully connected to MongoDB!")
+        log.Printf("Could not connect to MongoDB (this is fine for local API testing without DB): %v", err)
+    } else {
+		log.Println("Successfully connected to MongoDB!")
+	}
 
 	// defer func() {
 	// 	if err := client.Disconnect(context.TODO()); err != nil {

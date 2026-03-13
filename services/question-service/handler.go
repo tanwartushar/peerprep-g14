@@ -1,4 +1,4 @@
-package service
+package main
 
 import (
 	// "log"
@@ -24,11 +24,10 @@ type Handler struct {
 
 func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
 	var questDoc struct {
-        Question_title   string `json:"title"`
-        Question_description string `json:"description"`
-        Difficulty_level string `json:"difficulty"`
-        Related_topic []string `json:"topics"`
-        // Created_at string `json:"category"`
+        Title   string `json:"title"`
+        Description string `json:"description"`
+        Difficulty string `json:"difficulty"`
+        Topics []string `json:"topics"`
     }
 
 	// Bind JSON from the UI request
@@ -38,10 +37,10 @@ func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
     }
 
 	questID, err := h.QuestSvc.CreateQuestion(
-		&questDoc.Question_title, 
-		&questDoc.Question_description, 
-		questDoc.Difficulty_level, 
-		questDoc.Related_topic, 
+		&questDoc.Title, 
+		&questDoc.Description, 
+		questDoc.Difficulty, 
+		questDoc.Topics, 
 		database.Client)
 
 	if err != nil {
