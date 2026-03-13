@@ -21,8 +21,9 @@ const verifyGateway = async (req: any, res: any, next: any) => {
   // 1. Valid Access Token exists? Easy path.
   if (accessToken) {
     try {
-      const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string };
+      const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string, role: string };
       req.headers['x-user-id'] = decoded.userId;
+      req.headers['x-user-role'] = decoded.role;
       return next();
     } catch (err: any) {
       if (err.name !== 'TokenExpiredError') {
@@ -40,7 +41,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
         refreshToken 
       });
 
-      const { newAccessToken, userId } = response.data;
+      const { newAccessToken, userId, role } = response.data;
 
       // 3. SET THE COOKIE HERE (On the actual response going to user)
       res.cookie('accessToken', newAccessToken, {
@@ -51,6 +52,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       });
 
       req.headers['x-user-id'] = userId;
+      req.headers['x-user-role'] = role;
       return next();
     } catch (refreshErr) {
       return res.status(401).json({ message: "Session expired" });
@@ -64,6 +66,12 @@ app.use('/users', verifyGateway, createProxyMiddleware({
   target: 'http://user-service:3001',
   changeOrigin: true,
   pathRewrite: { '^/api/users': '' }, // Clean path for the target service
+}));
+
+// Route /api/questions to question-service
+app.use('/api/questions', verifyGateway, createProxyMiddleware({
+  target: 'http://question-service:8080',
+  changeOrigin: true,
 }));
 
 
