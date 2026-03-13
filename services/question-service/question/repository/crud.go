@@ -11,6 +11,7 @@ import (
 	"time"
 
 	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
 	// "golang.org/x/text/cases"
@@ -61,6 +62,7 @@ type Question struct {
 	Difficulty  string   `json:"difficulty" bson:"difficulty"`
 	Topics      []string `json:"topics" bson:"topics"`
 	CreatedAt   string   `json:"createdAt" bson:"createdAt"`
+	// image_url
 }
 
 // Stringer inteface
@@ -155,4 +157,111 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
 	}
 	fmt.Printf("Inserted document with _id: %v\n", result.InsertedID)
 	return result.InsertedID, nil
+}
+
+func (q *QuestionService) GetQuestions(difficulty string, topic string, client *mongo.Client) ([]Question, error) {
+	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	filter := bson.M{}
+	if difficulty != "" {
+		filter["difficulty"] = difficulty
+	}
+	if topic != "" {
+		filter["topics"] = topic
+	}
+
+	cursor, err := question_coll.Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	var questions []Question // initialize as nil slice, Find will append
+	if err = cursor.All(context.TODO(), &questions); err != nil {
+		return nil, err
+	}
+
+	if questions == nil {
+		questions = []Question{}
+	}
+
+	return questions, nil
+}
+
+func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Question, error) {
+	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	objID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, fmt.Errorf("invalid ID format")
+	}
+
+	var result Question
+	err = question_coll.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&result)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("question not found")
+		}
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, client *mongo.Client) error {
+	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	objID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return fmt.Errorf("invalid ID format")
+	}
+
+	topicstore := NewTopicStore()
+	validatedLevel, err := validateDifficulty(diff)
+	if err != nil {
+		return err
+	}
+
+	validatedTopics, err := validateTopics(topics, topicstore)
+	if err != nil {
+		return err
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"title":       *title,
+			"description": *desc,
+			"difficulty":  validatedLevel,
+			"topics":      validatedTopics,
+		},
+	}
+
+	result, err := question_coll.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return fmt.Errorf("question not found")
+	}
+
+	return nil
+}
+
+func (q *QuestionService) DeleteQuestion(id string, client *mongo.Client) error {
+	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	objID, err := bson.ObjectIDFromHex(id)
+	if err != nil {
+		return fmt.Errorf("invalid ID format")
+	}
+
+	result, err := question_coll.DeleteOne(context.TODO(), bson.M{"_id": objID})
+	if err != nil {
+		return err
+	}
+	if result.DeletedCount == 0 {
+		return fmt.Errorf("question not found")
+	}
+
+	return nil
 }
