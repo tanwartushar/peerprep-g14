@@ -19,7 +19,8 @@ var Client *mongo.Client
 func ConnectMongo() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		// log.Fatal("Error loading .env file")
+		log.Println("Warning: No .env file found. Relying on system environment variables.")
 	}
 	uri := os.Getenv("MONGODB_URI")
 	docs := "www.mongodb.com/docs/drivers/go/current/"

@@ -11,48 +11,33 @@ import (
 )
 
 func main() {
-	// initialize MongoDB connection
-	database.ConnectMongo()
-	defer func() {
-		if err := database.Client.Disconnect(context.Background()); err != nil {
-			log.Fatalf("Error disconnecting from MongoDB: %v", err)
-		}
-	}()
+    database.ConnectMongo()
+    defer func() {
+        if err := database.Client.Disconnect(context.Background()); err != nil {
+            log.Fatalf("Error disconnecting from MongoDB: %v", err)
+        }
+    }()
 
-	// initialize gin engine
-	r := gin.Default()
+    r := gin.Default()
 
-	// initialize controller handler
-	h := &Handler{
-		QuestSvc: &repository.QuestionService{},
-	}
+    h := &Handler{
+        QuestSvc: &repository.QuestionService{},
+    }
 
-	// base routes
-	api := r.Group("/api/questions")
-	{
-		api.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"status": "healthy",
-				"service": "question-service",
-			})
-		})
+    r.GET("/health", func(c *gin.Context) {
+        c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+    })
 
-		api.GET("/", h.GetQuestionsRequest)
-		api.GET("/:id", h.GetQuestionByIDRequest)
+    r.GET("/", h.GetQuestionsRequest)
+    r.GET("/:id", h.GetQuestionByIDRequest)
 
-		// Admin-only mutation routes
-		adminApi := api.Group("/")
-		adminApi.Use(AdminOnly())
-		{
-			adminApi.POST("/", h.PostCreateQuestionRequest)
-			adminApi.PUT("/:id", h.PutQuestionRequest)
-			adminApi.DELETE("/:id", h.DeleteQuestionRequest)
-		}
-	}
+    // admin only routes
+    r.POST("/", AdminOnly(), h.PostCreateQuestionRequest)
+    r.PUT("/:id", AdminOnly(), h.PutQuestionRequest)
+    r.DELETE("/:id", AdminOnly(), h.DeleteQuestionRequest)
 
-	// start server on port 8080
-	log.Println("Starting Question Service on port 8080...")
-	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+    log.Println("Starting Question Service on port 8080...")
+    if err := r.Run(":8080"); err != nil {
+        log.Fatalf("Failed to start server: %v", err)
+    }
 }

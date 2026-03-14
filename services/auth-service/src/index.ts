@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 app.use(cookieParser());
 
-const ACCESS_SECRET = process.env.ACCESS_SECRET_TOKEN!;
+const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 const PORT = process.env.PORT || 3000;
 
 // Middleware to verify JWT
@@ -58,6 +58,8 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       return res.status(401).json({ message: "Session expired" });
     }
   }
+
+  return res.status(401).json({ message: "Unauthorized: No tokens provided" });
 };
 
 // PROXY LOGIC
@@ -72,6 +74,7 @@ app.use('/users', verifyGateway, createProxyMiddleware({
 app.use('/api/questions', verifyGateway, createProxyMiddleware({
   target: 'http://question-service:8080',
   changeOrigin: true,
+  pathRewrite: { '^/api/questions': '/' },
 }));
 
 

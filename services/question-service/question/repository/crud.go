@@ -56,7 +56,7 @@ func NewTopicStore() *TopicStore {
 }
 
 type Question struct {
-	ID          string   `json:"_id,omitempty" bson:"_id,omitempty"`
+	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
 	Title       string   `json:"title" bson:"title"`
 	Description string   `json:"description" bson:"description"`
 	Difficulty  string   `json:"difficulty" bson:"difficulty"`

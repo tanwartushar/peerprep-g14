@@ -68,6 +68,12 @@ services:
       context: ./services/question-service
       dockerfile: Dockerfile
 
+    environment:
+      # points to the Docker container named 'db' on port 27017
+      - MONGODB_URI=mongodb://db:27017/?directConnection=true
+    depends_on:
+      - db
+
   # --- OPTIONAL: DATABASE ---
   db:
     image: mongo:latest            # Or postgres, redis, etc.
