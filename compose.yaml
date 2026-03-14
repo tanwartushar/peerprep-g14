@@ -63,13 +63,13 @@ services:
   #     dockerfile: Dockerfile
 
   # --- SERVICE 3 (e.g., Question Service) ---
-  # question-service:
-  #   build:
-  #     context: ./services/question-service
-  #     dockerfile: Dockerfile
+  question-service:
+    build:
+      context: ./services/question-service
+      dockerfile: Dockerfile
 
-  # # --- OPTIONAL: DATABASE ---
-  # db:
-  #   image: mongo:latest            # Or postgres, redis, etc.
-  #   ports:
-  #     - "27017:27017"
+  # --- OPTIONAL: DATABASE ---
+  db:
+    image: mongo:latest            # Or postgres, redis, etc.
+    ports:
+      - "27017:27017"

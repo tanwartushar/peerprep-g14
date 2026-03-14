@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o /question-service ./service.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /question-service .
 
 # Use a lightweight alpine image for running
 FROM alpine:latest
@@ -20,7 +20,7 @@ WORKDIR /
 # Copy the pre-built binary
 COPY --from=builder /question-service /question-service
 
-EXPOSE 3003
+EXPOSE 8080
 
 # Run the executable
 CMD ["/question-service"]
