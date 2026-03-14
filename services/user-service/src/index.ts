@@ -153,7 +153,7 @@ app.get('/user/user/login', async (req, res) => {
   }
 });
 
-app.put('/api/user/profile', async (req, res) => {
+app.put('/profile', async (req, res) => {
   const userId = req.body.userId; // Alternatively read from authenticated session/cookie
   const { bio, experienceLevel } = req.body;
 

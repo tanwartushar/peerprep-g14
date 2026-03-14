@@ -24,7 +24,7 @@ export const ProfileSetup: React.FC = () => {
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        
+
         if (!userId) {
             alert('User ID is missing. Please log in again.');
             navigate('/');
@@ -34,9 +34,10 @@ export const ProfileSetup: React.FC = () => {
         setIsLoading(true);
 
         try {
-            const response = await fetch('http://localhost:3001/api/user/profile', {
+            const response = await fetch('http://localhost/api/user/profile', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                     userId,
                     bio,
@@ -50,7 +51,7 @@ export const ProfileSetup: React.FC = () => {
             }
 
             // Successfully updated
-            navigate('/dashboard');
+            navigate('/dashboard', { replace: true });
         } catch (error: any) {
             alert(error.message);
         } finally {
@@ -60,7 +61,7 @@ export const ProfileSetup: React.FC = () => {
 
     const handleSkip = () => {
         // Just go to dashboard
-        navigate('/dashboard');
+        navigate('/dashboard', { replace: true });
     }
 
     return (
@@ -79,13 +80,13 @@ export const ProfileSetup: React.FC = () => {
                     <div className="dashboard-header flex-col flex-center text-center">
                         <h1 className="dashboard-title">Welcome to PeerPrep!</h1>
                         <p className="dashboard-subtitle mt-2">
-                           You're almost there. Tell us a bit about yourself so we can find the best peers for your mock interviews.
+                            You're almost there. Tell us a bit about yourself so we can find the best peers for your mock interviews.
                         </p>
                     </div>
 
                     <Card glow className="mt-8 p-8" >
                         <form onSubmit={handleSubmit}>
-                            
+
                             <div className="form-group mb-6">
                                 <Select
                                     label="Experience Level"
@@ -98,7 +99,7 @@ export const ProfileSetup: React.FC = () => {
                             </div>
 
                             <div className="form-group mb-8">
-                                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)'}}>
+                                <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-primary)' }}>
                                     Bio (Optional)
                                 </label>
                                 <div className="input-group">
@@ -126,7 +127,7 @@ export const ProfileSetup: React.FC = () => {
                                 >
                                     Complete Setup
                                 </Button>
-                                
+
                                 <Button
                                     type="button"
                                     variant="ghost"

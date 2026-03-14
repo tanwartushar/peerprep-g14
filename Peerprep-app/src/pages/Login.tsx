@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, User } from "lucide-react";
+import { Mail, Lock } from "lucide-react";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import "./Login.css";
@@ -32,6 +32,7 @@ export const Login: React.FC = () => {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // Ensure cookies are saved
         body: JSON.stringify({
           email,
           password,
@@ -46,7 +47,7 @@ export const Login: React.FC = () => {
       }
 
       // PeerPrep logic: Redirect based on admin status
-      if (data.isAdmin || isAdminMode) {
+      if (data.user?.role === "ADMIN" || isAdminMode) {
         navigate("/admin");
       } else {
         navigate("/dashboard");

@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 app.use(cookieParser());
 
-const ACCESS_SECRET = process.env.ACCESS_SECRET_TOKEN!;
+const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 const PORT = process.env.PORT || 3000;
 
 // Middleware to verify JWT
@@ -21,8 +21,9 @@ const verifyGateway = async (req: any, res: any, next: any) => {
   // 1. Valid Access Token exists? Easy path.
   if (accessToken) {
     try {
-      const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string };
+      const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string, role: string };
       req.headers['x-user-id'] = decoded.userId;
+      req.headers['x-user-role'] = decoded.role;
       return next();
     } catch (err: any) {
       if (err.name !== 'TokenExpiredError') {
@@ -37,7 +38,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
     try {
       // Call User Service - It returns JSON, NOT a cookie
       const response = await axios.post('http://user-service:3001/auth/refresh', {
-        refreshToken 
+        refreshToken
       });
 
       const { newAccessToken, userId } = response.data;
@@ -47,7 +48,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 15 * 60 * 1000 
+        maxAge: 15 * 60 * 1000
       });
 
       req.headers['x-user-id'] = userId;
@@ -59,11 +60,9 @@ const verifyGateway = async (req: any, res: any, next: any) => {
 };
 
 // PROXY LOGIC
-// If the path starts with /api/users, send to user-service
-app.use('/users', verifyGateway, createProxyMiddleware({
+app.use('/api/user', verifyGateway, createProxyMiddleware({
   target: 'http://user-service:3001',
   changeOrigin: true,
-  pathRewrite: { '^/api/users': '' }, // Clean path for the target service
 }));
 
 
