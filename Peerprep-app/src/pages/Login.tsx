@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Mail, Lock } from "lucide-react";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
+import { useAuth } from "../context/AuthContext";
 import "./Login.css";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -48,8 +50,10 @@ export const Login: React.FC = () => {
 
       // PeerPrep logic: Redirect based on admin status
       if (data.user?.role === "ADMIN" || isAdminMode) {
+        login(data.user.id, data.user.role);
         navigate("/admin");
       } else {
+        login(data.user.id, data.user.role);
         navigate("/dashboard");
       }
     } catch (error: any) {

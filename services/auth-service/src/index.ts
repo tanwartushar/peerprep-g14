@@ -10,6 +10,12 @@ dotenv.config();
 const app = express();
 app.use(cookieParser());
 
+// DEBUG: Log every single incoming request
+app.use((req: any, res: any, next: any) => {
+  console.log(`[REQUEST] ${req.method} ${req.path}`);
+  next();
+});
+
 const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 const PORT = process.env.PORT || 3000;
 
@@ -17,6 +23,7 @@ const PORT = process.env.PORT || 3000;
 const verifyGateway = async (req: any, res: any, next: any) => {
   const { accessToken, refreshToken } = req.cookies;
 
+  console.log(req.path);
   console.log('Gateway Middleware Triggered');
   // 1. Valid Access Token exists? Easy path.
   if (accessToken) {
@@ -57,9 +64,52 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       return res.status(401).json({ message: "Session expired" });
     }
   }
+
+  // 3. No tokens at all — must be logged out
+  return res.status(401).json({ message: "Authentication required" });
 };
 
 // PROXY LOGIC
+
+// New endpoint for frontend to logout and clear session cookies
+app.post('/api/auth/logout', async (req: any, res: any) => {
+  console.log('LOGOUT HANDLER HIT');
+  console.log('Cookies received:', req.cookies);
+  const { refreshToken } = req.cookies;
+
+  if (refreshToken) {
+    try {
+      await axios.post('http://user-service:3001/auth/logout', {
+        refreshToken
+      });
+    } catch (err) {
+      console.error('Failed to clear token in user-service', err);
+    }
+  }
+
+  res.clearCookie('accessToken', {
+    httpOnly: true,
+    sameSite: 'lax',
+  });
+
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    sameSite: 'lax',
+  });
+
+  return res.status(200).json({ message: "Logged out successfully" });
+});
+
+// New endpoint for frontend to verify session validity
+app.get('/api/auth/verify', verifyGateway, (req: any, res: any) => {
+  // If we reach here, verifyGateway has already validated the token 
+  // and attached x-user-id and x-user-role headers.
+  return res.status(200).json({
+    userId: req.headers['x-user-id'],
+    role: req.headers['x-user-role']
+  });
+});
+
 app.use('/api/user', verifyGateway, createProxyMiddleware({
   target: 'http://user-service:3001',
   changeOrigin: true,

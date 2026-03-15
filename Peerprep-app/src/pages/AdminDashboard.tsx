@@ -6,6 +6,7 @@ import { Table } from '../components/Table';
 import { Modal } from '../components/Modal';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
+import { useAuth } from '../context/AuthContext';
 import './AdminDashboard.css';
 
 // --- Types & Placeholder Data ---
@@ -34,6 +35,7 @@ const AVAILABLE_TOPICS = [
 
 export const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
     const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
 
     // Modal States
@@ -52,6 +54,11 @@ export const AdminDashboard: React.FC = () => {
     const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
 
     // --- Handlers ---
+    const handleLogout = async () => {
+        await logout();
+        navigate('/');
+    };
+
     const handleOpenCreate = () => {
         setEditingId(null);
         setFormData({ title: '', topics: [], difficulty: 'easy', description: '', mediaUrl: '' });
@@ -181,7 +188,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="navbar-user">
                     <span className="tag-sm text-accent bg-accent-light border-accent">Admin Mode</span>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+                    <Button variant="ghost" size="sm" onClick={handleLogout}>
                         <LogOut className="h-4 w-4 mr-2" />
                         Sign Out
                     </Button>

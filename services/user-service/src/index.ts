@@ -250,8 +250,8 @@ app.post('/user/admin/login', async (req, res) => {
 });
 
 app.post('/auth/refresh', async (req, res) => {
-  // 1. Get the raw JWT from the HttpOnly cookie
-  const rawRefreshToken = req.cookies?.refreshToken;
+  // Token is sent in the body by auth-service (server-to-server call, no cookies)
+  const rawRefreshToken = req.body?.refreshToken;
 
   if (!rawRefreshToken) {
     return res.status(401).json({ message: 'Refresh token missing' });
@@ -289,5 +289,26 @@ app.post('/auth/refresh', async (req, res) => {
   } catch (error) {
     console.error('Refresh Error:', error);
     return res.status(403).json({ message: 'Invalid refresh token' });
+  }
+});
+
+app.post('/auth/logout', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(400).json({ message: 'Refresh token missing' });
+  }
+
+  try {
+    const incomingHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+
+    await prisma.user_refresh_token.deleteMany({
+      where: { token_hash: incomingHash },
+    });
+
+    return res.status(200).json({ message: 'Token removed from database' });
+  } catch (error) {
+    console.error('Logout DB Error:', error);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });

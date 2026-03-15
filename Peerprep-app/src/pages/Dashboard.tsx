@@ -4,12 +4,19 @@ import { BookOpen, Target, Play, User as UserIcon, LogOut } from 'lucide-react';
 import { Card } from '../components/Card';
 import { Select } from '../components/Select';
 import { Button } from '../components/Button';
+import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 
 export const Dashboard: React.FC = () => {
     const navigate = useNavigate();
+    const { logout } = useAuth();
     const [difficulty, setDifficulty] = useState('');
     const [topic, setTopic] = useState('');
+
+    const handleLogout = async () => {
+        await logout();
+        navigate('/');
+    };
 
     const handleStartMatching = () => {
         if (difficulty && topic) {
@@ -48,7 +55,7 @@ export const Dashboard: React.FC = () => {
                 </div>
                 <div className="navbar-user">
                     <span className="user-name">Welcome, John Doe</span>
-                    <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+                    <Button variant="ghost" size="sm" onClick={handleLogout}>
                         <LogOut className="h-4 w-4 mr-2" />
                         Sign Out
                     </Button>
