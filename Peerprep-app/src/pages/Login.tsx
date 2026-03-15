@@ -4,15 +4,16 @@ import { Mail, Lock } from "lucide-react";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import "./Login.css";
+import "../styles/Layout.css";
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-    // --- ADD THESE STATES ---
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
+  // --- ADD THESE STATES ---
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   // This is for user login with github
   const handleLogin = () => {
@@ -60,7 +61,7 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="login-background">
+    <div className="linear-gradient-background page-shell">
       <div className="dotted-card">
         <div className="brand-panel">
           <h1 className="brand-text">PeerPrep</h1>
