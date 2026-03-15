@@ -57,11 +57,11 @@ func NewTopicStore() *TopicStore {
 
 type Question struct {
 	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title       string   `json:"title" bson:"title"`
-	Description string   `json:"description" bson:"description"`
-	Difficulty  string   `json:"difficulty" bson:"difficulty"`
-	Topics      []string `json:"topics" bson:"topics"`
-	CreatedAt   string   `json:"createdAt" bson:"createdAt"`
+	Title       string   `json:"title" bson:"question_id"`
+	Description string   `json:"description" bson:"question_description"`
+	Difficulty  string   `json:"difficulty" bson:"difficulty_level"`
+	Topics      []string `json:"topics" bson:"related_topic"`
+	CreatedAt   string   `json:"createdAt" bson:"created_at"`
 	// image_url
 }
 

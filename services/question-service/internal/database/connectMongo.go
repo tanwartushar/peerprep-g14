@@ -16,7 +16,7 @@ import (
 
 var Client *mongo.Client
 
-func ConnectMongo() {
+func ConnectMongo() *mongo.Client{
 	err := godotenv.Load()
 	if err != nil {
 		// log.Fatal("Error loading .env file")
@@ -54,7 +54,7 @@ func ConnectMongo() {
 	// 	}
 	// }()
 
-	Client = client
+	// Client = client
 
 	// database := "questionTestcaseDB"
 	// question_col := "testcase_collection"
@@ -79,7 +79,7 @@ func ConnectMongo() {
 	// }
 	// fmt.Printf("%s\n", jsonData)
 
-	// return client
+	return client
 }
 
 func closeConnection(client *mongo.Client) {
