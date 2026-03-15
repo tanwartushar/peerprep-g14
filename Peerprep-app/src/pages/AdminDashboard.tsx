@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, LogOut, Database, AlertCircle, Upload, X } from 'lucide-react';
 import { Button } from '../components/Button';
@@ -6,9 +6,10 @@ import { Table } from '../components/Table';
 import { Modal } from '../components/Modal';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
+import { fetchQuestions, createQuestion, updateQuestion, deleteQuestion } from '../../BackendClient';
 import './AdminDashboard.css';
 
-// --- Types & Placeholder Data ---
+// --- Types & Constants ---
 interface Question {
     id: string;
     title: string;
@@ -18,23 +19,18 @@ interface Question {
     mediaUrl?: string;
 }
 
-const INITIAL_QUESTIONS: Question[] = [
-    { id: '1', title: 'Two Sum', topics: ['Arrays', 'Hash Table'], difficulty: 'easy' },
-    { id: '2', title: 'Reverse Linked List', topics: ['Linked List'], difficulty: 'easy' },
-    { id: '3', title: 'Container With Most Water', topics: ['Two Pointers', 'Arrays'], difficulty: 'medium' },
-    { id: '4', title: 'LRU Cache', topics: ['Design', 'Hash Table', 'Linked List'], difficulty: 'medium' },
-    { id: '5', title: 'Merge K Sorted Lists', topics: ['Linked List', 'Divide and Conquer', 'Heap'], difficulty: 'hard' },
-];
-
 const AVAILABLE_TOPICS = [
-    'Arrays', 'Strings', 'Linked List', 'Trees', 'Graphs',
-    'Dynamic Programming', 'Math', 'Sorting', 'Hash Table',
-    'Two Pointers', 'Binary Search', 'Design', 'Heap', 'Divide and Conquer'
+    { value: 'binary_search', label: 'Binary Search' },
+    { value: 'depth_first_search', label: 'Depth First Search' },
+    { value: 'breadth_first_search', label: 'Breadth First Search' },
+    { value: 'singly_linked_list', label: 'Singly Linked List' },
+    { value: 'doubly_linked_list', label: 'Doubly Linked List' }
 ];
 
 export const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
-    const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
+    const [questions, setQuestions] = useState<Question[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     // Modal States
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -51,6 +47,25 @@ export const AdminDashboard: React.FC = () => {
     });
     const [questionToDelete, setQuestionToDelete] = useState<Question | null>(null);
 
+    // Fetch initial data
+    const loadQuestions = async () => {
+        try {
+            setIsLoading(true);
+            const data = await fetchQuestions();
+            setQuestions(data);
+        } catch (error) {
+            console.error("Error loading questions:", error);
+        } finally {
+            setIsLoading(false);
+        }
+        console.log("questionpayload:", questions)
+        console.log("formdata:", formData)
+    };
+
+    useEffect(() => {
+        loadQuestions();
+    }, []);
+
     // --- Handlers ---
     const handleOpenCreate = () => {
         setEditingId(null);
@@ -60,7 +75,13 @@ export const AdminDashboard: React.FC = () => {
 
     const handleOpenEdit = (q: Question) => {
         setEditingId(q.id);
-        setFormData({ title: q.title, topics: [...q.topics], difficulty: q.difficulty, description: q.description || '', mediaUrl: q.mediaUrl || '' });
+        setFormData({ 
+            title: q.title, 
+            topics: [...q.topics], 
+            difficulty: q.difficulty, 
+            description: q.description || '', 
+            mediaUrl: q.mediaUrl || '' 
+        });
         setIsFormModalOpen(true);
     };
 
@@ -86,7 +107,6 @@ export const AdminDashboard: React.FC = () => {
         if (selectedTopic && !formData.topics.includes(selectedTopic)) {
             setFormData(prev => ({ ...prev, topics: [...prev.topics, selectedTopic] }));
         }
-        // Reset the select dropdown
         e.target.value = '';
     };
 
@@ -97,31 +117,41 @@ export const AdminDashboard: React.FC = () => {
         }));
     };
 
-    const handleSaveQuestion = () => {
+    const handleSaveQuestion = async () => {
         if (!formData.title || formData.topics.length === 0) return;
 
-        if (editingId) {
-            // Update
-            setQuestions(prev =>
-                prev.map(q => q.id === editingId ? { ...formData, id: editingId } : q)
-            );
-        } else {
-            // Create
-            const newQuestion: Question = {
-                ...formData,
-                id: Math.random().toString(36).substr(2, 9),
-            };
-            setQuestions(prev => [...prev, newQuestion]);
+        try {
+            if (editingId) {
+                await updateQuestion(editingId, formData);
+            } else {
+                await createQuestion(formData);
+            }
+            setIsFormModalOpen(false);
+            await loadQuestions(); // refresh table after saving
+        } catch (error) {
+            console.error("Error saving question:", error);
+            alert("Failed to save question. Please check the console or backend logs.");
         }
-        setIsFormModalOpen(false);
     };
 
-    const handleConfirmDelete = () => {
+    const handleConfirmDelete = async () => {
         if (questionToDelete) {
-            setQuestions(prev => prev.filter(q => q.id !== questionToDelete.id));
+            try {
+                await deleteQuestion(questionToDelete.id);
+                setIsDeleteModalOpen(false);
+                setQuestionToDelete(null);
+                await loadQuestions(); // refresh table after deleting
+            } catch (error) {
+                console.error("Error deleting question:", error);
+                alert("Failed to delete question. Please check the console or backend logs.");
+            }
         }
-        setIsDeleteModalOpen(false);
-        setQuestionToDelete(null);
+    };
+
+    // --- Format helper for table display ---
+    const getTopicLabel = (value: string) => {
+        const topic = AVAILABLE_TOPICS.find(t => t.value === value);
+        return topic ? topic.label : value;
     };
 
     // --- Table Configuration ---
@@ -136,8 +166,10 @@ export const AdminDashboard: React.FC = () => {
             accessorKey: 'topics' as const,
             cell: (item: Question) => (
                 <div className="flex flex-wrap gap-1">
-                    {item.topics.map(topic => (
-                        <span key={topic} className="tag-sm custom-tag text-accent">{topic}</span>
+                    {item.topics.map(topicValue => (
+                        <span key={topicValue} className="tag-sm custom-tag text-accent">
+                            {getTopicLabel(topicValue)}
+                        </span>
                     ))}
                 </div>
             ),
@@ -201,7 +233,11 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="table-wrapper mt-8">
-                    <Table data={questions} columns={columns} />
+                    {isLoading ? (
+                        <div className="p-8 text-center text-secondary">Loading questions...</div>
+                    ) : (
+                        <Table data={questions} columns={columns} />
+                    )}
                 </div>
             </main>
 
@@ -244,20 +280,20 @@ export const AdminDashboard: React.FC = () => {
                         <Select
                             options={[
                                 { value: '', label: 'Select a topic...' },
-                                ...AVAILABLE_TOPICS.map(t => ({ value: t, label: t }))
+                                ...AVAILABLE_TOPICS.map(t => ({ value: t.value, label: t.label }))
                             ]}
                             onChange={handleTopicSelect}
                             value=""
                         />
                         {formData.topics.length > 0 && (
                             <div className="selected-topics-container">
-                                {formData.topics.map(topic => (
-                                    <div key={topic} className="selected-topic-tag">
-                                        <span>{topic}</span>
+                                {formData.topics.map(topicValue => (
+                                    <div key={topicValue} className="selected-topic-tag">
+                                        <span>{getTopicLabel(topicValue)}</span>
                                         <button
                                             type="button"
                                             className="topic-remove-btn"
-                                            onClick={() => handleRemoveTopic(topic)}
+                                            onClick={() => handleRemoveTopic(topicValue)}
                                         >
                                             <X className="h-3 w-3" />
                                         </button>

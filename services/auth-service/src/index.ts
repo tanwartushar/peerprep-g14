@@ -41,7 +41,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
         refreshToken
       });
 
-      const { newAccessToken, userId } = response.data;
+      const { newAccessToken, userId, role } = response.data;
 
       // 3. SET THE COOKIE HERE (On the actual response going to user)
       res.cookie('accessToken', newAccessToken, {
@@ -52,17 +52,27 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       });
 
       req.headers['x-user-id'] = userId;
+      req.headers['x-user-role'] = role;
       return next();
     } catch (refreshErr) {
       return res.status(401).json({ message: "Session expired" });
     }
   }
+
+  return res.status(401).json({ message: "Unauthorized: No tokens provided" });
 };
 
 // PROXY LOGIC
 app.use('/api/user', verifyGateway, createProxyMiddleware({
   target: 'http://user-service:3001',
   changeOrigin: true,
+}));
+
+// Route /api/questions to question-service
+app.use('/api/questions', verifyGateway, createProxyMiddleware({
+  target: 'http://question-service:3002',
+  changeOrigin: true,
+  pathRewrite: { '^/api/questions': '/' },
 }));
 
 

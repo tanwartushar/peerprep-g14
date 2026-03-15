@@ -17,6 +17,7 @@ services:
     depends_on:
       - frontend
       - user-service
+      - question-service
 
   auth-service:
     build:
@@ -47,6 +48,12 @@ services:
         - action: sync
           path: ./Peerprep-app # Watch only frontend changes
           target: /Peerprep-app
+        - action: sync
+          path: ./services/question-service # Watch only frontend changes
+          target: /Peerprep-appd
+
+    environment:
+      - CHOKIDAR_USEPOLLING=true
 
   # --- USER SERVICE ---
   user-service:
@@ -73,12 +80,25 @@ services:
   #     dockerfile: Dockerfile
 
   # --- SERVICE 3 (e.g., Question Service) ---
-  # question-service:
-  #   build:
-  #     context: ./services/question-service
-  #     dockerfile: Dockerfile
-
-  # # --- OPTIONAL: DATABASE ---
+  question-service:
+    ports:
+      - "3002:3002"
+    env_file:
+      - ./services/question-service/.env
+    platform: linux/amd64 
+    build:
+      context: ./services/question-service
+      dockerfile: Dockerfile
+    depends_on:
+      - auth-service  # if it depends on auth
+    restart: on-failure
+    # image: golang
+    # develop:
+    #   watch:
+    #     - action: sync
+    #       path: ./services/question-service
+    #       target: /app
+  # --- OPTIONAL: DATABASE ---
   # db:
   #   image: mongo:latest            # Or postgres, redis, etc.
   #   ports:
