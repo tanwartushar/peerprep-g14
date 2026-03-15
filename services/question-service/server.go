@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	// "github.com/gin-contrib/cors"
 	// "github.com/tgonet/peerprep-g14/services/question-service"
 	"github.com/tgonet/peerprep-g14/services/question-service/handler"
 	"github.com/tgonet/peerprep-g14/services/question-service/internal/database"
@@ -26,14 +27,13 @@ func main() {
 		DB: mongoClient,
 		QuestSvc: &repository.QuestionService{},
 	}
-
-	//curl.exe -X DELETE http://localhost:3002/deletequestion/abc123
-	r.DELETE("/deletequestion/:id", h.DeleteQuestionRequest)
-
+	// curl.exe -X GET http://localhost:3002/health
 	r.GET("/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{"status": "healthy"})
     })
 
+	//curl.exe -X GET http://localhost:3002/?difficulty=easy
+	//curl.exe -X GET http://localhost:3002/?difficulty=easy?topic=binary_search
     r.GET("/", h.GetQuestionsRequest)
 	//curl.exe -X GET http://localhost:3002/69a4454453ab6df3d3679d65
     r.GET("/:id", h.GetQuestionByIDRequest)

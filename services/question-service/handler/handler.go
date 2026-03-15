@@ -52,6 +52,7 @@ func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"question_id": questID})
 }
 
+//fetch all qns, or filter by difficulty and topic
 func (h *Handler) GetQuestionsRequest(c *gin.Context) {
 	difficulty := c.Query("difficulty")
 	topic := c.Query("topic")

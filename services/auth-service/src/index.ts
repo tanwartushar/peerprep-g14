@@ -72,7 +72,7 @@ app.use('/users', verifyGateway, createProxyMiddleware({
 
 // Route /api/questions to question-service
 app.use('/api/questions', verifyGateway, createProxyMiddleware({
-  target: 'http://question-service:8080',
+  target: 'http://question-service:3002',
   changeOrigin: true,
   pathRewrite: { '^/api/questions': '/' },
 }));

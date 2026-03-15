@@ -57,11 +57,11 @@ func NewTopicStore() *TopicStore {
 
 type Question struct {
 	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title       string   `json:"title" bson:"question_id"`
-	Description string   `json:"description" bson:"question_description"`
-	Difficulty  string   `json:"difficulty" bson:"difficulty_level"`
-	Topics      []string `json:"topics" bson:"related_topic"`
-	CreatedAt   string   `json:"createdAt" bson:"created_at"`
+	Title       string   `json:"title" bson:"Title"`
+	Description string   `json:"description" bson:"Description"`
+	Difficulty  string   `json:"difficulty" bson:"Difficulty"`
+	Topics      []string `json:"topics" bson:"Topics"`
+	CreatedAt   string   `json:"createdAt" bson:"CreatedAt"`
 	// image_url
 }
 
@@ -149,8 +149,8 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
 	fmt.Printf("createdAt: %s\n", doc.CreatedAt)
 
 	// client := database.ConnectMongo()
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
-	result, err := question_coll.InsertOne(context.TODO(), doc)
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+	result, err := questionColl.InsertOne(context.TODO(), doc)
 	if err != nil {
 		// panic(err)
 		return nil, err
@@ -160,17 +160,17 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
 }
 
 func (q *QuestionService) GetQuestions(difficulty string, topic string, client *mongo.Client) ([]Question, error) {
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	filter := bson.M{}
 	if difficulty != "" {
-		filter["difficulty"] = difficulty
+		filter["Difficulty"] = difficulty
 	}
 	if topic != "" {
-		filter["topics"] = topic
+		filter["Topics"] = topic
 	}
 
-	cursor, err := question_coll.Find(context.TODO(), filter)
+	cursor, err := questionColl.Find(context.TODO(), filter)
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +189,7 @@ func (q *QuestionService) GetQuestions(difficulty string, topic string, client *
 }
 
 func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Question, error) {
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
@@ -197,7 +197,7 @@ func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Que
 	}
 
 	var result Question
-	err = question_coll.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&result)
+	err = questionColl.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&result)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return nil, fmt.Errorf("question not found")
@@ -209,7 +209,7 @@ func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Que
 }
 
 func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, client *mongo.Client) error {
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
@@ -236,7 +236,7 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 		},
 	}
 
-	result, err := question_coll.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
+	result, err := questionColl.UpdateOne(context.TODO(), bson.M{"_id": objID}, update)
 	if err != nil {
 		return err
 	}
@@ -248,14 +248,14 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 }
 
 func (q *QuestionService) DeleteQuestion(id string, client *mongo.Client) error {
-	question_coll := client.Database("questionTestcaseDB").Collection(quest_col)
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
 	if err != nil {
 		return fmt.Errorf("invalid ID format")
 	}
 
-	result, err := question_coll.DeleteOne(context.TODO(), bson.M{"_id": objID})
+	result, err := questionColl.DeleteOne(context.TODO(), bson.M{"_id": objID})
 	if err != nil {
 		return err
 	}
@@ -264,4 +264,20 @@ func (q *QuestionService) DeleteQuestion(id string, client *mongo.Client) error 
 	}
 
 	return nil
+}
+
+func (q *QuestionService) QueryAllQuestions(client *mongo.Client) ([]Question, error) {
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	var questionList []Question
+
+	cursor, err := questionColl.Find(context.TODO(), bson.D{})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := cursor.All(context.TODO(), &questionList); err != nil {
+		return nil, err
+	}
+	return questionList, nil
 }

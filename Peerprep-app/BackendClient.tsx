@@ -5,18 +5,21 @@ const getHeaders = () => ({
 });
 
 export const fetchQuestions = async () => {
-    const response = await fetch(API_BASE_URL, {
+    const response = await fetch(`${API_BASE_URL}/`, {
         method: 'GET',
-        credentials: 'include' 
+        credentials: 'include' ,
     });
     if (!response.ok) throw new Error('Failed to fetch questions');
     
     const data = await response.json();
-    return data.map((q: any) => ({ ...q, id: q._id })); 
+    return data.map((q: any) => ({ 
+        ...q, id: q._id,
+        topics: q.topics ?? []
+     })); 
 };
 
 export const createQuestion = async (questionData: any) => {
-    const response = await fetch(API_BASE_URL, {
+    const response = await fetch(`${API_BASE_URL}/`, {
         method: 'POST',
         headers: getHeaders(),
         credentials: 'include',

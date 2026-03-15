@@ -1,6 +1,6 @@
-FROM --platform=linux/amd64 golang:1.25-alpine AS builder
+# FROM --platform=linux/amd64 golang:1.25-alpine AS builder
 # FROM golang:1.25-alpine AS builder
-# FROM golang:1.26-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ WORKDIR /
 COPY --from=builder /question-service /question-service
 RUN chmod +x /question-service 
 
-EXPOSE 8080
+EXPOSE 3002
 
 # Run the executable
 ENTRYPOINT ["/question-service"]

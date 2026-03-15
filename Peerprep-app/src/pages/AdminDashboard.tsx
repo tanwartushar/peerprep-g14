@@ -58,6 +58,8 @@ export const AdminDashboard: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
+        console.log("questionpayload:", questions)
+        console.log("formdata:", formData)
     };
 
     useEffect(() => {
