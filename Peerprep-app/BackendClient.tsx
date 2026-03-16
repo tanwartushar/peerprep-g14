@@ -29,7 +29,7 @@ export const createQuestion = async (questionData: any) => {
     return response.json();
 };
 
-export const updateQuestion = async (id: string, questionData: any) => {
+export const updateQuestion = async (id: string, questionData: object) => {
     const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'PUT',
         headers: getHeaders(),
