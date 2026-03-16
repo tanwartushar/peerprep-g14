@@ -20,6 +20,8 @@ services:
       - question-service
 
   auth-service:
+    ports:
+      - "3000:3000"
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
@@ -32,7 +34,7 @@ services:
       watch:
         - action: sync+restart
           path: ./services/auth-service/src
-          target: /usr/src/app/src   # Changed from /app to /usr/src/app/src
+          target: /usr/src/app/src # Changed from /app to /usr/src/app/src
         - action: rebuild
           path: ./services/auth-service/package.json
 
@@ -57,6 +59,8 @@ services:
 
   # --- USER SERVICE ---
   user-service:
+    ports:
+      - "3001:3001"
     build:
       context: ./services/user-service # Path to your user service folder
       dockerfile: Dockerfile
@@ -69,7 +73,7 @@ services:
       watch:
         - action: sync+restart
           path: ./services/user-service/src
-          target: /usr/src/app/src   # Changed from /app to /usr/src/app/src
+          target: /usr/src/app/src # Changed from /app to /usr/src/app/src
         - action: rebuild
           path: ./services/user-service/package.json
 
@@ -85,12 +89,12 @@ services:
       - "3002:3002"
     env_file:
       - ./services/question-service/.env
-    platform: linux/amd64 
+    platform: linux/amd64
     build:
       context: ./services/question-service
       dockerfile: Dockerfile
     depends_on:
-      - auth-service  # if it depends on auth
+      - auth-service # if it depends on auth
     restart: on-failure
     # image: golang
     # develop:

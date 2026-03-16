@@ -32,6 +32,17 @@
   box-shadow: 0 0 50px 5px rgba(121, 139, 255, 0.85);
 }
 
+.load-profile-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  gap: 1rem;
+
+  height: 100vh;
+}
+
 .title-container {
   display: flex;
   flex-direction: column;
