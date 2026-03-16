@@ -98,9 +98,9 @@ services:
     restart: on-failure
     develop:
       watch:
-          - action: sync
-            path: ./services/question-service
-            target: /app
+        - action: sync
+          path: ./services/question-service
+          target: /app
     # image: golang
     # develop:
     #   watch:
