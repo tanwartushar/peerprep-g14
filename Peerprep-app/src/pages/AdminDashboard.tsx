@@ -109,12 +109,17 @@ export const AdminDashboard: React.FC = () => {
         setFormData(prev => ({ ...prev, mediaUrl: '' }));
     };
 
-    const handleTopicSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const selectedTopic = e.target.value;
+    // const handleTopicSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    //     const selectedTopic = e.target.value;
+    //     if (selectedTopic && !formData.topics.includes(selectedTopic)) {
+    //         setFormData(prev => ({ ...prev, topics: [...prev.topics, selectedTopic] }));
+    //     }
+    //     e.target.value = '';
+    // };
+    const handleTopicSelect = (selectedTopic: string) => {
         if (selectedTopic && !formData.topics.includes(selectedTopic)) {
             setFormData(prev => ({ ...prev, topics: [...prev.topics, selectedTopic] }));
         }
-        e.target.value = '';
     };
 
     const handleRemoveTopic = (topicToRemove: string) => {
@@ -313,7 +318,7 @@ export const AdminDashboard: React.FC = () => {
                     <Select
                         label="Difficulty Level"
                         value={formData.difficulty}
-                        onChange={e => setFormData({ ...formData, difficulty: e.target.value as Question['difficulty'] })}
+                        onChange={(value) => setFormData({ ...formData, difficulty: value as Question['difficulty'] })}
                         options={[
                             { value: 'easy', label: 'Easy' },
                             { value: 'medium', label: 'Medium' },

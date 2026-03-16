@@ -93,7 +93,9 @@ export const Select: React.FC<SelectProps> = ({
                   type="button"
                   key={option.value}
                   className={`select-option ${isSelected ? "selected" : ""}`}
-                  onClick={() => onChange(option.value)}
+                  onClick={() => {onChange(option.value);
+                    setIsOpen(false)
+                  }}
                 >
                   <span>{option.label}</span>
                   {isSelected && <Check className="h-4 w-4" />}

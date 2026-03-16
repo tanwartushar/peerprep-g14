@@ -50,7 +50,7 @@ services:
           target: /Peerprep-app
         - action: sync
           path: ./services/question-service # Watch only frontend changes
-          target: /Peerprep-appd
+          target: /Peerprep-app
 
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -92,6 +92,11 @@ services:
     depends_on:
       - auth-service  # if it depends on auth
     restart: on-failure
+    develop:
+      watch:
+          - action: sync
+            path: ./services/question-service
+            target: /app
     # image: golang
     # develop:
     #   watch:
