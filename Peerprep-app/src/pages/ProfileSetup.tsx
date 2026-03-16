@@ -10,6 +10,7 @@ import { Input } from "../components/Input";
 import { MultiSelect } from "../components/MultiSelect";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { Spinner } from "../components/Spinner";
+import { useUpdateCurrentUserProfile } from "../hooks/useUpdateCurrentUserProfile";
 
 export const ProfileSetup: React.FC = () => {
   const navigate = useNavigate();
@@ -20,6 +21,7 @@ export const ProfileSetup: React.FC = () => {
     isLoading: profileLoading,
     error: profileError,
   } = useCurrentUserProfile();
+  const updateProfileMutation = useUpdateCurrentUserProfile();
 
   // TODO
   // Currently just skip to dashboard if error occurs
@@ -68,23 +70,13 @@ export const ProfileSetup: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost/api/user/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          userId,
-          name,
-          experienceLevel,
-          learningPurpose,
-          bio,
-        }),
+      await updateProfileMutation.mutateAsync({
+        userId,
+        name,
+        experienceLevel,
+        learningPurpose,
+        bio,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || "Failed to complete profile setup");
-      }
 
       // Successfully updated
       navigate("/dashboard", { replace: true });
