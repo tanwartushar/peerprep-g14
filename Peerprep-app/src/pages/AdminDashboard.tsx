@@ -134,7 +134,11 @@ export const AdminDashboard: React.FC = () => {
 
         try {
             if (editingId) {
+                console.log('Updating ID:', editingId);
+                console.log('Payload:', formData);
                 await updateQuestion(editingId, formData);
+                const result = await updateQuestion(editingId, formData);
+                console.log('Update result:', result);
             } else {
                 await createQuestion(formData);
             }

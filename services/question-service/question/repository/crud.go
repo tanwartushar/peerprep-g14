@@ -229,10 +229,10 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 
 	update := bson.M{
 		"$set": bson.M{
-			"title":       *title,
-			"description": *desc,
-			"difficulty":  validatedLevel,
-			"topics":      validatedTopics,
+			"Title":       *title,
+			"Description": *desc,
+			"Difficulty":  validatedLevel,
+			"Topics":      validatedTopics,
 		},
 	}
 
