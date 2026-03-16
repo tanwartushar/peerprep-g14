@@ -1,22 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, User as UserIcon, LogOut } from "lucide-react";
+import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
 import { Card } from "../components/Card";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
-import { useAuth } from "../context/AuthContext";
 import "./Dashboard.css";
+import { Header } from "../components/Header";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
-
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
 
   const handleStartMatching = () => {
     if (difficulty && topic) {
@@ -25,14 +19,12 @@ export const Dashboard: React.FC = () => {
   };
 
   const difficultyOptions = [
-    { value: "", label: "Select Difficulty" },
     { value: "easy", label: "Easy" },
     { value: "medium", label: "Medium" },
     { value: "hard", label: "Hard" },
   ];
 
   const topicOptions = [
-    { value: "", label: "Select a Topic" },
     { value: "arrays", label: "Arrays & Hashing" },
     { value: "two-pointers", label: "Two Pointers" },
     { value: "sliding-window", label: "Sliding Window" },
@@ -46,54 +38,41 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard-layout animate-fade-in">
-      <nav className="navbar">
-        <div className="navbar-brand">
-          <div className="brand-icon-sm">
-            <UserIcon className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-gradient">PeerPrep</span>
-        </div>
-        <div className="navbar-user">
-          <span className="user-name">Welcome, John Doe</span>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </nav>
+      <Header logo brandName profile signout />
 
       <main className="dashboard-content">
         <div className="dashboard-header flex-col flex-center">
           <h1 className="dashboard-title">Ready to Practice?</h1>
           <p className="dashboard-subtitle">
-            Select your preferred difficulty and topic to find a peer for your
+            Select your preferred topic and difficulty to find a peer for your
             next mock interview.
           </p>
         </div>
 
         <div className="dashboard-cards">
           <Card glow className="selection-card">
-            <h2 className="card-title flex-center">
+            <div className="flex flex-row">
               <Target className="h-6 w-6 mr-2 text-accent-primary" />
-              Configure Session
-            </h2>
-
-            <div className="form-group mt-8">
-              <Select
-                label="Difficulty Level"
-                options={difficultyOptions}
-                value={difficulty}
-                onChange={(e) => setDifficulty(e.target.value)}
-              />
+              <h2 className="card-title flex-center">Configure Session</h2>
             </div>
 
-            <div className="form-group mt-6">
+            <div className="form-group">
               <Select
                 label="Interview Topic"
+                placeholder="Select Topic"
                 options={topicOptions}
                 value={topic}
-                onChange={(e) => setTopic(e.target.value)}
+                onChange={setTopic}
                 leftIcon={<BookOpen className="h-5 w-5" />}
+              />
+
+              <Select
+                label="Difficulty Level"
+                placeholder="Select Difficulty"
+                options={difficultyOptions}
+                value={difficulty}
+                onChange={setDifficulty}
+                leftIcon={<CircleGauge className="h-5 w-5" />}
               />
             </div>
 

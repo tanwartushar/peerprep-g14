@@ -94,7 +94,10 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-md);
   z-index: 20;
-  overflow: hidden;
+
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .multi-select-option {

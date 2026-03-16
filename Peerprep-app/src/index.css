@@ -31,6 +31,9 @@
   --font-pixel: "Press Start 2P", system-ui;
   --font-normal: "Geologica", system-ui;
 
+  /* Icons */
+  --icon-sm: 30px;
+
   /* Borders and Radius */
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
@@ -153,5 +156,6 @@ body {
   );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+
   background-clip: text;
 }
