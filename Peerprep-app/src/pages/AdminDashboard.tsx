@@ -146,37 +146,20 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       if (editingId) {
-        await updateQuestion(editingId, formData);
+          console.log('Updating ID:', editingId);
+          console.log('Payload:', formData);
+          const result = await updateQuestion(editingId, formData);
+          console.log('Update result:', result);
       } else {
-        await createQuestion(formData);
+          await createQuestion(formData);
       }
       setIsFormModalOpen(false);
       await loadQuestions(); // refresh table after saving
     } catch (error) {
       console.error("Error saving question:", error);
-      alert(
-        "Failed to save question. Please check the console or backend logs.",
-      );
+      alert("Failed to save question. Please check the console or backend logs.");
     }
   };
-
-        try {
-            if (editingId) {
-                console.log('Updating ID:', editingId);
-                console.log('Payload:', formData);
-                await updateQuestion(editingId, formData);
-                const result = await updateQuestion(editingId, formData);
-                console.log('Update result:', result);
-            } else {
-                await createQuestion(formData);
-            }
-            setIsFormModalOpen(false);
-            await loadQuestions(); // refresh table after saving
-        } catch (error) {
-            console.error("Error saving question:", error);
-            alert("Failed to save question. Please check the console or backend logs.");
-        }
-    };
 
     const handleConfirmDelete = async () => {
         if (questionToDelete) {
