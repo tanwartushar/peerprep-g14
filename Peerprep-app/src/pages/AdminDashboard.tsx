@@ -312,6 +312,7 @@ export const AdminDashboard: React.FC = () => {
           <TextArea
             label="Description"
             placeholder="Provide a detailed description of the problem..."
+            value={formData.description ?? ""}
             onChange={(e) =>
               setFormData({ ...formData, description: e.target.value })
             }
