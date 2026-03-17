@@ -38,7 +38,6 @@ const availabelTopics = [
 export const AdminDashboard: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
 
   // Modal States
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -146,34 +145,38 @@ export const AdminDashboard: React.FC = () => {
 
     try {
       if (editingId) {
-          console.log('Updating ID:', editingId);
-          console.log('Payload:', formData);
-          const result = await updateQuestion(editingId, formData);
-          console.log('Update result:', result);
+        console.log("Updating ID:", editingId);
+        console.log("Payload:", formData);
+        const result = await updateQuestion(editingId, formData);
+        console.log("Update result:", result);
       } else {
-          await createQuestion(formData);
+        await createQuestion(formData);
       }
       setIsFormModalOpen(false);
       await loadQuestions(); // refresh table after saving
     } catch (error) {
       console.error("Error saving question:", error);
-      alert("Failed to save question. Please check the console or backend logs.");
+      alert(
+        "Failed to save question. Please check the console or backend logs.",
+      );
     }
   };
 
-    const handleConfirmDelete = async () => {
-        if (questionToDelete) {
-            try {
-                await deleteQuestion(questionToDelete.id);
-                setIsDeleteModalOpen(false);
-                setQuestionToDelete(null);
-                await loadQuestions(); // refresh table after deleting
-            } catch (error) {
-                console.error("Error deleting question:", error);
-                alert("Failed to delete question. Please check the console or backend logs.");
-            }
-        }
-    };
+  const handleConfirmDelete = async () => {
+    if (questionToDelete) {
+      try {
+        await deleteQuestion(questionToDelete.id);
+        setIsDeleteModalOpen(false);
+        setQuestionToDelete(null);
+        await loadQuestions(); // refresh table after deleting
+      } catch (error) {
+        console.error("Error deleting question:", error);
+        alert(
+          "Failed to delete question. Please check the console or backend logs.",
+        );
+      }
+    }
+  };
 
   // --- Format helper for table display ---
   const getTopicLabel = (value: string) => {
@@ -318,8 +321,8 @@ export const AdminDashboard: React.FC = () => {
             label="Topics"
             placeholder="Select Topics"
             options={availabelTopics}
-            value={selectedTopics}
-            onChange={setSelectedTopics}
+            value={formData.topics}
+            onChange={(topics) => setFormData((prev) => ({ ...prev, topics }))}
           />
           {/* <div className="form-group">
             <label className="form-label">Topics</label>
