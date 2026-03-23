@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
-import { Card } from "../components/Card";
+import { CardLight } from "../components/CardLight";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
@@ -50,7 +50,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         <div className="dashboard-cards">
-          <Card glow className="selection-card">
+          <CardLight glow className="selection-card">
             <div className="flex flex-row">
               <Target className="h-6 w-6 mr-2 text-accent-primary" />
               <h2 className="card-title flex-center">Configure Session</h2>
@@ -85,20 +85,20 @@ export const Dashboard: React.FC = () => {
             >
               Find a Match
             </Button>
-          </Card>
+          </CardLight>
 
           <div className="dashboard-stats flex-col">
-            <Card className="stat-card">
+            <CardLight className="stat-card">
               <h3>Recent Topics</h3>
               <div className="tags">
                 <span className="tag">Arrays</span>
                 <span className="tag">Trees</span>
               </div>
-            </Card>
-            <Card className="stat-card mt-4">
+            </CardLight>
+            <CardLight className="stat-card mt-4">
               <h3>Sessions Completed</h3>
               <div className="stat-number">12</div>
-            </Card>
+            </CardLight>
           </div>
         </div>
       </main>

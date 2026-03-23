@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Users, X } from "lucide-react";
-import { Card } from "../components/Card";
+import { CardLight } from "../components/CardLight";
 import { Button } from "../components/Button";
 import "./Matching.css";
 
@@ -53,7 +53,7 @@ export const Matching: React.FC = () => {
   return (
     <div className="matching-layout animate-fade-in">
       <div className="matching-container">
-        <Card glow className="text-center p-8">
+        <CardLight glow className="text-center p-8">
           <div className="matching-visuals">
             <div className="pulse-circle">
               <Users className="h-10 w-10 text-accent-primary" />
@@ -92,7 +92,7 @@ export const Matching: React.FC = () => {
           >
             Cancel Search
           </Button>
-        </Card>
+        </CardLight>
       </div>
     </div>
   );

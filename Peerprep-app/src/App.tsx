@@ -5,7 +5,6 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Matching } from "./pages/Matching";
 import { Workspace } from "./pages/Workspace";
@@ -14,6 +13,7 @@ import { ProfileSetup } from "./pages/ProfileSetup";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Query, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./App.css";
+import { Login } from "./pages/Login";
 
 // A component to protect routes that require authentication
 const ProtectedRoute: React.FC<{
