@@ -66,7 +66,7 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="linear-gradient-background page-shell">
+    <div className="background-default page-shell">
       <div
         className={`dotted-card ${isAdminMode ? "dotted-card-admin" : "dotted-card-user"}`}
       >

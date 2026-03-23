@@ -103,6 +103,14 @@
   --color-light: var(--admin-200);
 }
 
+.dotted-card-user {
+  --dotted-bg-image: url(/dotted-bg-user.png);
+}
+
+.dotted-card-admin {
+  --dotted-bg-image: url(/dotted-bg-admin.png);
+}
+
 /* Remove padding from browser */
 html,
 body,

@@ -11,6 +11,7 @@ import { MultiSelect } from "../components/MultiSelect";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { Spinner } from "../components/Spinner";
 import { useUpdateCurrentUserProfile } from "../hooks/useUpdateCurrentUserProfile";
+import Card from "../components/Card";
 
 export const ProfileSetup: React.FC = () => {
   const navigate = useNavigate();
@@ -93,26 +94,29 @@ export const ProfileSetup: React.FC = () => {
   };
 
   return (
-    <div className="linear-gradient-background page-shell">
-      <main className="container">
-        <div className="setup-card">
-          {profileLoading ? (
-            <div className="load-profile-container">
-              <Spinner size="lg" />
-              <h1 className="subtitle">We're getting your profile ready...</h1>
-            </div>
-          ) : (
-            <>
-              <div className="title-container">
-                <h1 className="title">You're almost there...</h1>
-                <p className="subtitle">
-                  Tell us a bit about yourself so we can find the best peers for
-                  your mock interviews.
-                </p>
+    <div className="background-default page-shell">
+      <div className="dotted-card dotted-card-user">
+        <main className="container">
+          <Card
+            theme="user"
+            title="You're almost there..."
+            subtitle="Tell us a bit about yourself so we can find the best peers for your mock interviews"
+            headerAlign="center"
+            showDivider
+            floating
+            className="setup-card"
+            contentClassName="form-container"
+            fullWidth={false}
+          >
+            {profileLoading ? (
+              <div className="load-profile-container">
+                <Spinner size="lg" />
+                <h1 className="subtitle">
+                  We're getting your profile ready...
+                </h1>
               </div>
-              <div className="thin-line" />
-
-              <div className="form-container">
+            ) : (
+              <>
                 <form onSubmit={handleSubmit}>
                   <div>
                     <Input
@@ -182,11 +186,11 @@ export const ProfileSetup: React.FC = () => {
                     </Button>
                   </div>
                 </form>
-              </div>
-            </>
-          )}
-        </div>
-      </main>
+              </>
+            )}
+          </Card>
+        </main>
+      </div>
     </div>
   );
 };

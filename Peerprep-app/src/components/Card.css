@@ -85,7 +85,7 @@
 
 .pp-card--subtitle {
   font-family: var(--font-normal);
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-extra-light);
   font-size: clamp(1rem, 0.9rem + 0.6vw, 1.25rem);
   line-height: 1.2;
   color: var(--subtitle-color);
