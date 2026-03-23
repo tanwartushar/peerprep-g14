@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge, LogOut } from "lucide-react";
+import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
 // import { CardLight } from "../components/CardLight";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
@@ -8,6 +8,8 @@ import "./Dashboard.css";
 import { Header } from "../components/Header";
 import AppShell from "../components/AppShell";
 import Sidebar from "../components/Sidebar";
+import Card from "../components/Card";
+import { useAuth } from "../context/AuthContext";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +18,12 @@ export const Dashboard: React.FC = () => {
   const [isSidebarOpen, setIsSideBarOpen] = useState(false);
   const [activePage, setActivePage] = useState("Home");
   const dashboardTheme = "user";
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
 
   const handleStartMatching = () => {
     if (difficulty && topic) {
@@ -75,7 +83,7 @@ export const Dashboard: React.FC = () => {
               {
                 key: "logout",
                 label: "Logout",
-                onClick: () => console.log("logout"),
+                onClick: () => handleLogout(),
               },
             ]}
           />
@@ -89,7 +97,61 @@ export const Dashboard: React.FC = () => {
           />
         }
       >
-        Hello
+        <div className="dashboard-layout">
+          <div className="dashboard-main-container">
+            <Card
+              theme={dashboardTheme}
+              logo={<Target className="h-5 w-5" />}
+              title="Configure Session"
+              headerAlign="left"
+              showDivider
+              className="dashboard-content"
+            >
+              <div className="form-group">
+                <Select
+                  label="Interview Topic"
+                  placeholder="Select Topic"
+                  options={topicOptions}
+                  value={topic}
+                  onChange={setTopic}
+                  leftIcon={<BookOpen className="h-5 w-5" />}
+                />
+
+                <Select
+                  label="Difficulty Level"
+                  placeholder="Select Difficulty"
+                  options={difficultyOptions}
+                  value={difficulty}
+                  onChange={setDifficulty}
+                  leftIcon={<CircleGauge className="h-5 w-5" />}
+                />
+              </div>
+
+              <Button
+                size="lg"
+                variant="solid"
+                theme="user"
+                className="mt-8"
+                disabled={!difficulty || !topic}
+                onClick={handleStartMatching}
+                rightIcon={<Play className="h-5 w-5" />}
+              >
+                Find a Match
+              </Button>
+            </Card>
+          </div>
+          <div className="dashboard-right-container">
+            <Card
+              theme={dashboardTheme}
+              title={<div className="dashboard-title">Sessions Completed</div>}
+              headerAlign="left"
+              showDivider
+              className="dashboard-content"
+            >
+              <div className="stat-number">12</div>
+            </Card>
+          </div>
+        </div>
       </AppShell>
       {/* <Header logo brandName profile signout />
       <main className="dashboard-content">

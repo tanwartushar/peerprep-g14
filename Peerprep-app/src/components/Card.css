@@ -13,7 +13,7 @@
   box-shadow: var(--card-shadow);
   color: var(--card-text);
 
-  overflow: hidden;
+  /* overflow: hidden; */
   transition:
     border-color 0.25s ease,
     box-shadow 0.25s ease,
@@ -59,7 +59,7 @@
 
 /* Header */
 .pp-card--header {
-  width: 90%;
+  width: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -68,11 +68,24 @@
 .pp-card--header-left .pp-card--header {
   align-items: flex-start;
   text-align: left;
+  padding: 0 1.5rem;
 }
 
 .pp-card--header-center .pp-card--header {
   align-items: center;
   text-align: center;
+}
+
+.pp-card--title-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pp-card--title-logo {
+  color: var(--title-color);
+  padding-right: 0.8rem;
+  transform: translateY(2px);
 }
 
 .pp-card--title {
@@ -91,10 +104,17 @@
   color: var(--subtitle-color);
 }
 
+.pp-card--divider-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
+}
+
 .pp-card--divider {
   width: 100%;
   height: 1px;
-
   margin-top: 1rem;
   background: var(--card-divider-color);
   box-shadow: 0 0 8px rgb(var(--card-divider-rgb) / 0.35);

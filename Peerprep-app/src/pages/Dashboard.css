@@ -1,7 +1,18 @@
 .dashboard-layout {
-  min-height: 100vh;
   display: flex;
-  flex-direction: column;
+  padding: 2rem;
+
+  gap: 3rem;
+}
+
+.dashboard-main-container {
+  flex: 7;
+  min-width: 0;
+}
+
+.dashboard-right-container {
+  flex: 3;
+  min-width: 0;
 }
 
 .dashboard-content {
@@ -25,8 +36,7 @@
 .dashboard-title {
   font-family: var(--font-normal);
   color: var(--text-dark);
-  font-size: 3rem;
-  margin-bottom: 1rem;
+  font-size: 20px;
 }
 
 .dashboard-subtitle {
@@ -101,7 +111,7 @@
 
 .stat-number {
   font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--text-primary);
+  font-weight: var(--fw-medium);
+  color: var(--user-200);
   line-height: 1;
 }

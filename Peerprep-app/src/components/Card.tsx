@@ -7,6 +7,7 @@ type CardHeaderAlignment = "center" | "left";
 
 interface CardProps {
   children: React.ReactNode;
+  logo?: React.ReactNode;
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
   headerAlign: CardHeaderAlignment;
@@ -24,6 +25,7 @@ interface CardProps {
 const Card: React.FC<CardProps> = ({
   theme = "neutral",
   children,
+  logo,
   title,
   subtitle,
   headerAlign = "left",
@@ -54,9 +56,17 @@ const Card: React.FC<CardProps> = ({
     <section className={classes} onClick={onClick}>
       {(title || subtitle) && (
         <div className="pp-card--header">
-          <div className="pp-card--title">{title}</div>
+          <div className="pp-card--title-container">
+            {logo && <div className="pp-card--title-logo">{logo}</div>}
+
+            <div className="pp-card--title">{title}</div>
+          </div>
           <div className="pp-card--subtitle">{subtitle}</div>
-          {showDivider && <div className="pp-card--divider" />}
+        </div>
+      )}
+      {showDivider && (
+        <div className="pp-card--divider-container">
+          <div className="pp-card--divider" />
         </div>
       )}
 
