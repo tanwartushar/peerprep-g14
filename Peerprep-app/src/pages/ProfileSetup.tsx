@@ -128,10 +128,11 @@ export const ProfileSetup: React.FC = () => {
                           setName(githubDefaultName);
                         }
                       }}
+                      variant="solid"
                     />
-                    <p className="form-description">
+                    <div className="form-description">
                       Will default to your Github username.
-                    </p>
+                    </div>
                   </div>
 
                   <div>
@@ -167,7 +168,9 @@ export const ProfileSetup: React.FC = () => {
                   <div className="button-container">
                     <Button
                       type="submit"
-                      size="lg"
+                      variant="solid"
+                      size="sm"
+                      theme="user"
                       className="w-full"
                       isLoading={isLoading}
                       rightIcon={<CheckCircle className="h-5 w-5" />}

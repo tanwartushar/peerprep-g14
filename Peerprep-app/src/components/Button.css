@@ -157,6 +157,40 @@
     0 0 0 1px rgb(var(--btn-color-400-rgb) / var(--opacity-medium));
 }
 
+/* GHOST
+   default: no background, no border, text neutral-400
+   hover: text color-200 based on user/admin, raise 2px up from base button hover
+   selected: text color-200
+*/
+.pp-btn--ghost {
+  background-color: transparent;
+  color: var(--neutral-400);
+  border-color: transparent;
+  box-shadow: none;
+  border-radius: var(--radius-full);
+}
+
+.pp-btn--ghost:hover:not(:disabled):not(.is-selected) {
+  background-color: transparent;
+  color: var(--btn-color-200);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.pp-btn--ghost.is-selected {
+  background-color: transparent;
+  color: var(--btn-color-200);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.pp-btn--ghost.is-selected:hover:not(:disabled) {
+  background-color: transparent;
+  color: var(--btn-color-200);
+  border-color: transparent;
+  box-shadow: none;
+}
+
 /* loading */
 .pp-btn.is-loading {
   pointer-events: none;
