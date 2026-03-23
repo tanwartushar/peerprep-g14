@@ -1,98 +1,89 @@
 import React from "react";
 import "./Header.css";
-import { Database, Laptop, LogOut, LogOutIcon, UserIcon } from "lucide-react";
+import { Menu, UserIcon } from "lucide-react";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { Spinner } from "./Spinner";
 import { Button } from "./Button";
-import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
 
-interface Headers {
-  className?: String;
-  logo?: boolean;
-  brandName?: boolean;
-  profile?: boolean;
-  signout?: boolean;
-  admin?: boolean;
+type HeaderTheme = "user" | "admin";
+
+interface AppShellHeaderProps {
+  theme?: HeaderTheme;
+  showToggle?: boolean;
+  isSidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
+  showProfile?: boolean;
+  showProfileName?: boolean;
+  showProfilePicture?: boolean;
+  className?: string;
 }
 
-export const Header: React.FC<Headers> = ({
+export const Header: React.FC<AppShellHeaderProps> = ({
+  theme = "user",
+  showToggle = false,
+  isSidebarOpen = false,
+  onToggleSidebar,
+  showProfile = true,
+  showProfileName = true,
+  showProfilePicture = true,
   className = "",
-  logo = false,
-  brandName = false,
-  profile = false,
-  signout = false,
-  admin = false,
 }) => {
-  const navigate = useNavigate();
-  const { logout } = useAuth();
-  const {
-    data: user,
-    isLoading: profileLoading,
-    error: profileError,
-  } = useCurrentUserProfile();
-  // TODO
-  // Handle profileError
+  const { data: user, isLoading: profileLoading } = useCurrentUserProfile();
 
-  const handleLogout = async () => {
-    await logout();
-    navigate("/");
-  };
+  const displayName = theme === "admin" ? "Admin" : (user?.name ?? "User Name");
 
   return (
-    <div className={`header${admin ? "-admin" : ""} ${className}`}>
-      <div className="brand-container">
-        {logo && (
-          <div className="brand-icon-sm">
-            {admin ? (
-              <Database className="h-5 w-5 text-white" />
-            ) : (
-              <Laptop className="h-5 w-5 text-white" />
-            )}
-          </div>
-        )}
-
-        {brandName && (
-          <div className="brand-text-header">{`PeerPrep ${admin ? "Admin" : ""}`}</div>
+    <div
+      className={["app-shell-header", `app-shell-header--${theme}`, className]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="app-shell-header__left">
+        {showToggle && (
+          <Button
+            type="button"
+            theme={theme}
+            variant="ghost"
+            size="sm"
+            onClick={onToggleSidebar}
+            aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+            className="app-shell-header__toggle"
+          >
+            <Menu size={18} />
+          </Button>
         )}
       </div>
 
-      <div className="right-side">
-        {profile && (
-          <div className="profile-container">
-            {profileLoading && (
-              <div className="load-profile-container-row">
-                <div className="loading-profile-text">
+      <div className="app-shell-header__right">
+        {showProfile && (
+          <div className="app-shell-header__profile">
+            {profileLoading && theme !== "admin" ? (
+              <div className="app-shell-header__loading">
+                <span className="app-shell-header__loading-text">
                   Retrieving your name...
-                </div>
+                </span>
                 <Spinner size="lg" />
               </div>
+            ) : (
+              <>
+                {showProfileName && (
+                  <div className="app-shell-header__user-name">
+                    {displayName}
+                  </div>
+                )}
+
+                {showProfilePicture && (
+                  <div className="app-shell-header__profile-picture">
+                    <UserIcon className="h-5 w-5" />
+                  </div>
+                )}
+              </>
             )}
-
-            <>
-              {admin ? (
-                <div className="user-name">Admin</div>
-              ) : (
-                <div className="user-name">{user?.name ?? "User Name"}</div>
-              )}
-              <div className="profile-picture">
-                <UserIcon className="h-5 w-5" />
-              </div>
-            </>
           </div>
-        )}
-
-        {signout && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            leftIcon={<LogOutIcon className="w-4 h-4" />}
-          >
-            Sign Out
-          </Button>
         )}
       </div>
     </div>
   );
 };
+
+export default Header;

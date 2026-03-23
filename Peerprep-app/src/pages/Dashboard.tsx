@@ -1,16 +1,21 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
-import { CardLight } from "../components/CardLight";
+import { BookOpen, Target, Play, CircleGauge, LogOut } from "lucide-react";
+// import { CardLight } from "../components/CardLight";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
 import { Header } from "../components/Header";
+import AppShell from "../components/AppShell";
+import Sidebar from "../components/Sidebar";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
+  const [isSidebarOpen, setIsSideBarOpen] = useState(false);
+  const [activePage, setActivePage] = useState("Home");
+  const dashboardTheme = "user";
 
   const handleStartMatching = () => {
     if (difficulty && topic) {
@@ -37,9 +42,56 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="dashboard-layout animate-fade-in">
-      <Header logo brandName profile signout />
-
+    <div className="animate-fade-in">
+      <AppShell
+        theme={dashboardTheme}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSideBarOpen((prev) => !prev)}
+        sidebar={
+          <Sidebar
+            theme={dashboardTheme}
+            isOpen={isSidebarOpen}
+            topItems={[
+              {
+                key: "home",
+                label: "Home",
+                active: activePage === "home",
+                onClick: () => setActivePage("home"),
+              },
+              {
+                key: "questions",
+                label: "Questions",
+                active: activePage === "questions",
+                onClick: () => setActivePage("questions"),
+              },
+              {
+                key: "friends",
+                label: "Friends",
+                active: activePage === "friends",
+                onClick: () => setActivePage("friends"),
+              },
+            ]}
+            bottomItems={[
+              {
+                key: "logout",
+                label: "Logout",
+                onClick: () => console.log("logout"),
+              },
+            ]}
+          />
+        }
+        header={
+          <Header
+            theme={dashboardTheme}
+            showProfile
+            showProfileName
+            showProfilePicture
+          />
+        }
+      >
+        Hello
+      </AppShell>
+      {/* <Header logo brandName profile signout />
       <main className="dashboard-content">
         <div className="dashboard-header flex-col flex-center">
           <h1 className="dashboard-title">Ready to Practice?</h1>
@@ -101,7 +153,7 @@ export const Dashboard: React.FC = () => {
             </CardLight>
           </div>
         </div>
-      </main>
+      </main> */}
     </div>
   );
 };
