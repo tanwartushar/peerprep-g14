@@ -4,7 +4,7 @@ import { Award, Blocks, CheckCircle } from "lucide-react";
 import { TextArea } from "../components/TextArea";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
-import "../styles/Layout.css";
+import "../layouts/Layout.css";
 import "./ProfileSetup.css";
 import { Input } from "../components/Input";
 import { MultiSelect } from "../components/MultiSelect";
@@ -110,7 +110,7 @@ export const ProfileSetup: React.FC = () => {
           >
             {profileLoading ? (
               <div className="load-profile-container">
-                <Spinner size="lg" />
+                <Spinner spinnerTheme="user" size="lg" />
                 <h1 className="subtitle">
                   We're getting your profile ready...
                 </h1>

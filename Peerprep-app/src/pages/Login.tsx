@@ -5,7 +5,7 @@ import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
 import "./Login.css";
-import "../styles/Layout.css";
+import "../layouts/Layout.css";
 import Card from "../components/Card";
 
 export const Login: React.FC = () => {
@@ -53,10 +53,10 @@ export const Login: React.FC = () => {
       // PeerPrep logic: Redirect based on admin status
       if (data.user?.role === "ADMIN" || isAdminMode) {
         login(data.user.id, data.user.role);
-        navigate("/admin");
+        navigate("/admin/questions");
       } else {
         login(data.user.id, data.user.role);
-        navigate("/dashboard");
+        navigate("/user/dashboard");
       }
     } catch (error: any) {
       alert(error.message);

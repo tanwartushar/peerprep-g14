@@ -90,9 +90,8 @@
   background: rgba(245, 158, 11, 0.15);
 }
 
-.custom-tag.text-danger {
-  color: var(--danger);
-  background: rgba(239, 68, 68, 0.15);
+.text-danger {
+  color: var(--red);
 }
 
 .bg-accent-light {
@@ -132,7 +131,12 @@
 }
 
 .alert-icon-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
   background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
   padding: 1rem;
   border-radius: 50%;
   border: 1px solid rgba(239, 68, 68, 0.2);

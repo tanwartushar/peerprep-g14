@@ -5,7 +5,7 @@ import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
 import "./LoginLight.css";
-import "../styles/Layout.css";
+import "../layout/Layout.css";
 
 export const LoginLight: React.FC = () => {
   const navigate = useNavigate();

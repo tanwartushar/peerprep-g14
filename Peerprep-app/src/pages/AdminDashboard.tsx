@@ -45,7 +45,7 @@ export const AdminDashboard: React.FC = () => {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSidebarOpen, setIsSideBarOpen] = useState(false);
+  const [isSidebarOpen, setIsSideBarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [selectedQuestionId, setSelectedQuestionId] = React.useState<
     string | null
@@ -288,16 +288,16 @@ export const AdminDashboard: React.FC = () => {
       </AppShell>
 
       {/* --- Modals --- */}
+
+      {/* Edit Modal */}
       <Modal
+        theme="admin"
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
         title={editingId ? "Edit Question" : "Add New Question"}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsFormModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveQuestion}>
+            <Button theme="admin" variant="solid" onClick={handleSaveQuestion}>
               {editingId ? "Save Changes" : "Create Question"}
             </Button>
           </>
@@ -305,6 +305,7 @@ export const AdminDashboard: React.FC = () => {
       >
         <div className="form-layout">
           <Input
+            theme="admin"
             label="Question Title"
             placeholder="e.g. Merge Intervals"
             value={formData.title}
@@ -314,6 +315,7 @@ export const AdminDashboard: React.FC = () => {
           />
 
           <TextArea
+            theme="admin"
             label="Description"
             placeholder="Provide a detailed description of the problem..."
             value={formData.description ?? ""}
@@ -323,6 +325,7 @@ export const AdminDashboard: React.FC = () => {
           />
 
           <MultiSelect
+            theme="admin"
             label="Topics"
             placeholder="Select Topics"
             options={availabelTopics}
@@ -331,6 +334,7 @@ export const AdminDashboard: React.FC = () => {
           />
 
           <Select
+            theme="admin"
             label="Difficulty Level"
             value={formData.difficulty}
             onChange={(value) =>
@@ -381,16 +385,29 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </Modal>
 
+      {/* Delete Modal */}
       <Modal
+        theme="admin"
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         title="Confirm Deletion"
+        titleAlign="center"
+        hasCloseButton={false}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>
+            <Button
+              theme="admin"
+              variant="solid"
+              onClick={() => setIsDeleteModalOpen(false)}
+            >
               Cancel
             </Button>
-            <Button variant="ghost" onClick={handleConfirmDelete}>
+            <Button
+              theme="admin"
+              variant="ghost"
+              className="text-danger"
+              onClick={handleConfirmDelete}
+            >
               Delete
             </Button>
           </>
@@ -398,12 +415,12 @@ export const AdminDashboard: React.FC = () => {
       >
         <div className="delete-confirmation">
           <div className="alert-icon-wrapper">
-            <AlertCircle className="h-10 w-10 text-danger" />
+            <AlertCircle className="h-10 w-10" />
           </div>
           <p>
             Are you sure you want to delete{" "}
-            <strong>{questionToDelete?.title}</strong>? This action is permanent
-            and cannot be undone.
+            <strong>{questionToDelete?.title}</strong> ? This action is
+            permanent and cannot be undone.
           </p>
         </div>
       </Modal>

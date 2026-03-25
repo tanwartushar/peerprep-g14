@@ -148,7 +148,6 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
                           {
                             key: "edit",
                             label: "Edit",
-                            icon: <Edit2 size={18} />,
                             onClick: () => onEditQuestion(selectedQuestion),
                             variant: "primary" as const,
                           },
@@ -170,12 +169,14 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
             }
           >
             <div className="question-browser__details">
-              <div className="question-browser__section">
-                <div className="question-browser__label">ID</div>
-                <div className="question-browser__value">
-                  {selectedQuestion.id}
+              {theme === "admin" && (
+                <div className="question-browser__section">
+                  <div className="question-browser__label">ID</div>
+                  <div className="question-browser__value">
+                    {selectedQuestion.id}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="question-browser__section">
                 <div className="question-browser__label">Name</div>
