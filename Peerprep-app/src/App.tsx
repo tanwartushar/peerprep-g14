@@ -112,14 +112,6 @@ const App: React.FC = () => {
                     }
                   />
                   <Route
-                    path="/matching"
-                    element={
-                      <ProtectedRoute>
-                        <Matching />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/workspace"
                     element={
                       <ProtectedRoute>
@@ -136,6 +128,16 @@ const App: React.FC = () => {
                     }
                   />
                 </Route>
+
+                {/* User routes w/o AppShell */}
+                <Route
+                  path="/matching"
+                  element={
+                    <ProtectedRoute>
+                      <Matching />
+                    </ProtectedRoute>
+                  }
+                />
 
                 {/* Admin routes */}
                 <Route element={<AdminLayout />}>

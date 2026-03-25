@@ -317,11 +317,13 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
             isOpen={isDeleteModalOpen}
             onClose={() => setIsDeleteModalOpen(false)}
             title="Confirm Deletion"
+            titleAlign="center"
+            hasCloseButton={false}
             footer={
               <>
                 <Button
                   theme="admin"
-                  variant="ghost"
+                  variant="solid"
                   onClick={() => setIsDeleteModalOpen(false)}
                 >
                   Cancel
