@@ -45,6 +45,14 @@ const AdminLayout: React.FC = () => {
     },
   ];
 
+  const pageNameMap: Record<string, string> = {
+    "/admin/dashboard": "Dashboard",
+    "/admin/questions": "Questions",
+    "/admin/users": "Users",
+  };
+
+  const pageName = pageNameMap[location.pathname] ?? "";
+
   const bottomItems = [
     {
       key: "logout",
@@ -68,7 +76,16 @@ const AdminLayout: React.FC = () => {
         />
       }
       header={
-        <Header theme="admin" showProfile showProfileName showProfilePicture />
+        <Header
+          theme="admin"
+          showToggle
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          showProfile
+          showProfileName
+          showProfilePicture
+          pageName={pageName}
+        />
       }
     >
       <Outlet />

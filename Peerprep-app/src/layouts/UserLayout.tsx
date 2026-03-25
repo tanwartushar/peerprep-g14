@@ -45,6 +45,14 @@ const UserLayout: React.FC = () => {
     },
   ];
 
+  const pageNameMap: Record<string, string> = {
+    "/user/dashboard": "Home",
+    "/user/questions": "Questions",
+    "/user/friends": "Friends",
+  };
+
+  const pageName = pageNameMap[location.pathname] ?? "";
+
   const bottomItems = [
     {
       key: "logout",
@@ -68,7 +76,16 @@ const UserLayout: React.FC = () => {
         />
       }
       header={
-        <Header theme="user" showProfile showProfileName showProfilePicture />
+        <Header
+          theme="user"
+          showToggle
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+          showProfile
+          showProfileName
+          showProfilePicture
+          pageName={pageName}
+        />
       }
     >
       <Outlet />

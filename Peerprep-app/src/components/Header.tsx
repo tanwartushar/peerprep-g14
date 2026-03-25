@@ -15,17 +15,19 @@ interface AppShellHeaderProps {
   showProfile?: boolean;
   showProfileName?: boolean;
   showProfilePicture?: boolean;
+  pageName?: string;
   className?: string;
 }
 
 export const Header: React.FC<AppShellHeaderProps> = ({
   theme = "user",
-  showToggle = false,
+  showToggle = true,
   isSidebarOpen = false,
   onToggleSidebar,
   showProfile = true,
   showProfileName = true,
   showProfilePicture = true,
+  pageName = "",
   className = "",
 }) => {
   const { data: user, isLoading: profileLoading } = useCurrentUserProfile();
@@ -40,17 +42,18 @@ export const Header: React.FC<AppShellHeaderProps> = ({
     >
       <div className="app-shell-header__left">
         {showToggle && (
-          <Button
+          <button
             type="button"
-            theme={theme}
-            variant="ghost"
-            size="sm"
+            className="app-shell-header__toggle"
             onClick={onToggleSidebar}
             aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-            className="app-shell-header__toggle"
           >
-            <Menu size={18} />
-          </Button>
+            <Menu size={18} className="app-shell-header__toggle-icon" />
+          </button>
+        )}
+
+        {pageName && (
+          <div className="app-shell-header__page-name">{pageName}</div>
         )}
       </div>
 
@@ -59,10 +62,10 @@ export const Header: React.FC<AppShellHeaderProps> = ({
           <div className="app-shell-header__profile">
             {profileLoading && theme !== "admin" ? (
               <div className="app-shell-header__loading">
+                <Spinner spinnerTheme={theme} size="sm" />
                 <span className="app-shell-header__loading-text">
-                  Retrieving your name...
+                  Retrieving your data...
                 </span>
-                <Spinner size="lg" />
               </div>
             ) : (
               <>

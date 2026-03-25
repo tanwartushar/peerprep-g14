@@ -59,19 +59,6 @@ const AppShell: React.FC<AppShellProps> = ({
       >
         {header && (
           <header className="app-shell__header">
-            {hasSidebar && (
-              <button
-                type="button"
-                className="app-shell__toggle"
-                onClick={onToggleSidebar}
-                aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-              >
-                <span className="app-shell__toggle-line" />
-                <span className="app-shell__toggle-line" />
-                <span className="app-shell__toggle-line" />
-              </button>
-            )}
-
             <div className="app-shell__header-content">{header}</div>
           </header>
         )}

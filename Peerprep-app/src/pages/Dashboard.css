@@ -73,7 +73,7 @@
   flex-direction: column;
 }
 
-.mt-6 {
+.mt-8 {
   margin-top: 1.5rem;
 }
 
@@ -114,4 +114,20 @@
   font-weight: var(--fw-medium);
   color: var(--user-200);
   line-height: 1;
+}
+
+@media (max-width: 1100px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .dashboard-main-container {
+    flex: 6;
+    width: 100%;
+  }
+
+  .dashboard-right-container {
+    flex: 4;
+    width: 100%;
+  }
 }

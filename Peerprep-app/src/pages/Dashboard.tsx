@@ -64,12 +64,13 @@ export const Dashboard: React.FC = () => {
                 options={difficultyOptions}
                 value={difficulty}
                 onChange={setDifficulty}
+                className="mt-8"
                 leftIcon={<CircleGauge className="h-5 w-5" />}
               />
             </div>
 
             <Button
-              size="lg"
+              size="md"
               variant="solid"
               theme="user"
               className="mt-8"
