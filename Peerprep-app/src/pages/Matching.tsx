@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Users, X } from "lucide-react";
-import { CardLight } from "../components/CardLight";
 import { Button } from "../components/Button";
 import "./Matching.css";
+import Card from "../components/Card";
 
 interface LocationState {
   difficulty?: string;
@@ -18,25 +18,22 @@ export const Matching: React.FC = () => {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
   useEffect(() => {
-    // If accessed directly without state, redirect to dashboard
     if (!state?.difficulty || !state?.topic) {
       navigate("/dashboard");
       return;
     }
 
-    // Timer for display
     const timer = setInterval(() => {
       setSecondsElapsed((prev) => prev + 1);
     }, 1000);
 
     // Simulate finding a match after 5 seconds
-    const matchTimer = setTimeout(() => {
-      navigate("/workspace", { state });
-    }, 5000);
+    // const matchTimer = setTimeout(() => {
+    //   navigate("/workspace", { state });
+    // }, 5000);
 
     return () => {
       clearInterval(timer);
-      clearTimeout(matchTimer);
     };
   }, [navigate, state]);
 
@@ -53,46 +50,52 @@ export const Matching: React.FC = () => {
   return (
     <div className="matching-layout animate-fade-in">
       <div className="matching-container">
-        <CardLight glow className="text-center p-8">
-          <div className="matching-visuals">
-            <div className="pulse-circle">
-              <Users className="h-10 w-10 text-accent-primary" />
+        <Card theme="user" className="matching-card">
+          <div className="matching-card__inner">
+            <div className="matching-hero">
+              <div className="matching-pulse-ring matching-pulse-ring--1" />
+              <div className="matching-pulse-ring matching-pulse-ring--2" />
+              <div className="matching-pulse-ring matching-pulse-ring--3" />
+
+              <div className="matching-hero__core">
+                <Users className="matching-hero__icon" />
+              </div>
             </div>
-            <div className="pulse-ring ring-1"></div>
-            <div className="pulse-ring ring-2"></div>
-          </div>
+            <div className="matching-hero__title">Finding a Peer...</div>
 
-          <h1 className="matching-title mt-8">Finding a Peer...</h1>
+            <div className="matching-info">
+              <div className="matching-details">
+                <div className="detail-item">
+                  <span className="detail-label">Topic</span>
+                  <span className="detail-value">{state?.topic || "Any"}</span>
+                </div>
 
-          <div className="matching-details mt-4">
-            <div className="detail-item">
-              <span className="detail-label">Difficulty:</span>
-              <span className="detail-value tag">
-                {state?.difficulty || "Any"}
-              </span>
+                <div className="detail-item">
+                  <span className="detail-label">Difficulty</span>
+                  <span className="detail-value">
+                    {state?.difficulty || "Any"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="matching-timer">
+                <span className="timer-text">{formatTime(secondsElapsed)}</span>
+                <p className="timer-subtext">Estimated wait time: 00:30</p>
+              </div>
+
+              <div className="matching-actions">
+                <Button
+                  theme="user"
+                  variant="ghost"
+                  onClick={handleCancel}
+                  leftIcon={<X className="h-4 w-4" />}
+                >
+                  Cancel Search
+                </Button>
+              </div>
             </div>
-            <div className="detail-item mt-2">
-              <span className="detail-label">Topic:</span>
-              <span className="detail-value tag">{state?.topic || "Any"}</span>
-            </div>
           </div>
-
-          <div className="matching-timer mt-8">
-            <span className="timer-text font-mono">
-              {formatTime(secondsElapsed)}
-            </span>
-            <p className="timer-subtext">Estimated wait time: 00:30</p>
-          </div>
-
-          <Button
-            variant="ghost"
-            onClick={handleCancel}
-            className="mt-8"
-            leftIcon={<X className="h-4 w-4" />}
-          >
-            Cancel Search
-          </Button>
-        </CardLight>
+        </Card>
       </div>
     </div>
   );

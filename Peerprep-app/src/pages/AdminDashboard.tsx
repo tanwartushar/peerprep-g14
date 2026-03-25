@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Plus, Edit2, Trash2, AlertCircle, Upload, X } from "lucide-react";
 import { Button } from "../components/Button";
-import { Table } from "../components/Table";
 import { Modal } from "../components/Modal";
 import { Input } from "../components/Input";
 import { Select } from "../components/Select";
@@ -14,8 +14,11 @@ import {
 import "./AdminDashboard.css";
 import { Header } from "../components/Header";
 import { TextArea } from "../components/TextArea";
-import { Spinner } from "../components/Spinner";
 import { MultiSelect } from "../components/MultiSelect";
+import AppShell from "../components/AppShell";
+import Sidebar from "../components/Sidebar";
+import { useAuth } from "../context/AuthContext";
+import QuestionBrowser from "../components/QuestionBrowser";
 
 // --- Types & Constants ---
 interface Question {
@@ -36,8 +39,18 @@ const availabelTopics = [
 ];
 
 export const AdminDashboard: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { logout } = useAuth();
+
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSidebarOpen, setIsSideBarOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [selectedQuestionId, setSelectedQuestionId] = React.useState<
+    string | null
+  >(null);
+  const dashboardTheme = "admin";
 
   // Modal States
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -55,6 +68,13 @@ export const AdminDashboard: React.FC = () => {
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(
     null,
   );
+  const [searchValue, setSearchValue] = useState("");
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await logout();
+    navigate("/");
+  };
 
   // Fetch initial data
   const loadQuestions = async () => {
@@ -67,6 +87,7 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
+
     console.log("questionpayload:", questions);
     console.log("formdata:", formData);
   };
@@ -117,13 +138,6 @@ export const AdminDashboard: React.FC = () => {
     setFormData((prev) => ({ ...prev, mediaUrl: "" }));
   };
 
-  // const handleTopicSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-  //     const selectedTopic = e.target.value;
-  //     if (selectedTopic && !formData.topics.includes(selectedTopic)) {
-  //         setFormData(prev => ({ ...prev, topics: [...prev.topics, selectedTopic] }));
-  //     }
-  //     e.target.value = '';
-  // };
   const handleTopicSelect = (selectedTopic: string) => {
     if (selectedTopic && !formData.topics.includes(selectedTopic)) {
       setFormData((prev) => ({
@@ -153,7 +167,7 @@ export const AdminDashboard: React.FC = () => {
         await createQuestion(formData);
       }
       setIsFormModalOpen(false);
-      await loadQuestions(); // refresh table after saving
+      await loadQuestions();
     } catch (error) {
       console.error("Error saving question:", error);
       alert(
@@ -168,7 +182,7 @@ export const AdminDashboard: React.FC = () => {
         await deleteQuestion(questionToDelete.id);
         setIsDeleteModalOpen(false);
         setQuestionToDelete(null);
-        await loadQuestions(); // refresh table after deleting
+        await loadQuestions();
       } catch (error) {
         console.error("Error deleting question:", error);
         alert(
@@ -184,106 +198,96 @@ export const AdminDashboard: React.FC = () => {
     return topic ? topic.label : value;
   };
 
-  // --- Table Configuration ---
-  const columns = [
+  const filteredQuestions = questions.filter((question) => {
+    const q = searchValue.trim().toLowerCase();
+    if (!q) return true;
+
+    return (
+      question.title.toLowerCase().includes(q) ||
+      question.topics.some((topic) =>
+        getTopicLabel(topic).toLowerCase().includes(q),
+      )
+    );
+  });
+
+  const topItems = [
     {
-      header: "Title",
-      accessorKey: "title" as const,
-      cell: (item: Question) => (
-        <span className="font-medium text-primary">{item.title}</span>
-      ),
+      key: "questions",
+      label: "Questions",
+      active: location.pathname.startsWith("/admin"),
+      onClick: () => navigate("/admin/questions"),
     },
     {
-      header: "Topics",
-      accessorKey: "topics" as const,
-      cell: (item: Question) => (
-        <div className="flex flex-wrap gap-1">
-          {item.topics.map((topicValue) => (
-            <span key={topicValue} className="tag-sm custom-tag text-accent">
-              {getTopicLabel(topicValue)}
-            </span>
-          ))}
-        </div>
-      ),
+      key: "users",
+      label: "Users",
+      active: location.pathname.startsWith("/admin/users"),
+      onClick: () => navigate("/admin/users"),
     },
+  ];
+
+  const bottomItems = [
     {
-      header: "Difficulty",
-      accessorKey: "difficulty" as const,
-      cell: (item: Question) => {
-        const colorClass =
-          item.difficulty === "easy"
-            ? "text-success bg-success-light"
-            : item.difficulty === "medium"
-              ? "text-warning bg-warning-light"
-              : "text-danger bg-danger-light";
-        return (
-          <span className={`tag-sm custom-tag ${colorClass}`}>
-            {item.difficulty}
-          </span>
-        );
-      },
-    },
-    {
-      header: "Actions",
-      accessorKey: "id" as const,
-      cell: (item: Question) => (
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleOpenEdit(item)}
-          >
-            <Edit2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="danger"
-            size="sm"
-            onClick={() => handleOpenDelete(item)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      key: "logout",
+      label: "Logout",
+      onClick: () => handleLogout(),
+      isLoading: isLoggingOut,
     },
   ];
 
   return (
-    <div className="admin-layout animate-fade-in">
-      <Header logo brandName profile signout admin />
-
-      {/* Main Content */}
-      <main className="admin-content container">
-        <div className="admin-header">
-          <div>
-            <h1 className="admin-title">Question Repository</h1>
-            <p className="admin-subtitle">
-              Manage the global database of interview questions.
-            </p>
-          </div>
+    <div className="animate-fade-in">
+      <AppShell
+        theme={dashboardTheme}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSideBarOpen((prev) => !prev)}
+        sidebar={
+          <Sidebar
+            theme={dashboardTheme}
+            isOpen={isSidebarOpen}
+            topItems={topItems}
+            bottomItems={bottomItems}
+          />
+        }
+        header={
+          <Header
+            theme={dashboardTheme}
+            showProfile
+            showProfileName
+            showProfilePicture
+          />
+        }
+      >
+        <div className="admin-dashboard-shell">
+          <QuestionBrowser
+            theme="admin"
+            questions={filteredQuestions.map((question) => ({
+              id: question.id,
+              title: question.title,
+              topics: question.topics,
+              difficulty: question.difficulty,
+              description: question.description,
+              attempts: 0,
+            }))}
+            isLoading={isLoading}
+            selectedQuestionId={selectedQuestionId}
+            onSelectedQuestionChange={(question) =>
+              setSelectedQuestionId(question.id)
+            }
+            onEditQuestion={handleOpenEdit}
+            onDeleteQuestion={handleOpenDelete}
+            getTopicLabel={getTopicLabel}
+            searchValue={searchValue}
+            onSearchChange={setSearchValue}
+            searchPlaceholder="Search question"
+            showFilterButton
+            onFilterClick={() => console.log("open filter")}
+            showAddButton
+            onAddClick={handleOpenCreate}
+          />
         </div>
-
-        <Button
-          onClick={handleOpenCreate}
-          leftIcon={<Plus className="h-5 w-5" />}
-        >
-          Add Question
-        </Button>
-
-        <div className="table-wrapper mt-8">
-          {isLoading ? (
-            <div className="p-8 text-center text-secondary">
-              <Spinner />
-              Loading questions...
-            </div>
-          ) : (
-            <Table data={questions} columns={columns} />
-          )}
-        </div>
-      </main>
+      </AppShell>
 
       {/* --- Modals --- */}
-
-      {/* Form Modal (Create / Edit) */}
       <Modal
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
@@ -325,36 +329,6 @@ export const AdminDashboard: React.FC = () => {
             value={formData.topics}
             onChange={(topics) => setFormData((prev) => ({ ...prev, topics }))}
           />
-          {/* <div className="form-group">
-            <label className="form-label">Topics</label>
-            <Select
-              options={[
-                { value: "", label: "Select a topic..." },
-                ...AVAILABLE_TOPICS.map((t) => ({
-                  value: t.value,
-                  label: t.label,
-                })),
-              ]}
-              onChange={handleTopicSelect}
-              value=""
-            />
-            {formData.topics.length > 0 && (
-              <div className="selected-topics-container">
-                {formData.topics.map((topicValue) => (
-                  <div key={topicValue} className="selected-topic-tag">
-                    <span>{getTopicLabel(topicValue)}</span>
-                    <button
-                      type="button"
-                      className="topic-remove-btn"
-                      onClick={() => handleRemoveTopic(topicValue)}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div> */}
 
           <Select
             label="Difficulty Level"
@@ -407,7 +381,6 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -417,7 +390,7 @@ export const AdminDashboard: React.FC = () => {
             <Button variant="ghost" onClick={() => setIsDeleteModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="danger" onClick={handleConfirmDelete}>
+            <Button variant="ghost" onClick={handleConfirmDelete}>
               Delete
             </Button>
           </>

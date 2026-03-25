@@ -132,7 +132,7 @@
    ========================= */
 
 .pp-card--neutral {
-  --card-bg: rgb(var(--neutral-950-rgb) / 0.98) 100%;
+  --card-bg: rgb(var(--neutral-950-rgb) / var(--opacity-strong)) 100%;
   --card-border-color: rgb(var(--neutral-600-rgb) / 0.8);
   --card-divider-color: rgb(var(--neutral-400-rgb) / 0.7);
   --card-divider-rgb: var(--neutral-400-rgb);

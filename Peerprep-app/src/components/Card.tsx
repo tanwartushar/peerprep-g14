@@ -10,7 +10,7 @@ interface CardProps {
   logo?: React.ReactNode;
   title?: React.ReactNode;
   subtitle?: React.ReactNode;
-  headerAlign: CardHeaderAlignment;
+  headerAlign?: CardHeaderAlignment;
   theme?: CardTheme;
   showDivider?: boolean;
   hoverTone?: CardHoverTone;

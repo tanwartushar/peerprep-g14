@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
 // import { CardLight } from "../components/CardLight";
 import { Select } from "../components/Select";
@@ -13,14 +13,16 @@ import { useAuth } from "../context/AuthContext";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
   const [isSidebarOpen, setIsSideBarOpen] = useState(false);
-  const [activePage, setActivePage] = useState("Home");
-  const dashboardTheme = "user";
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { logout } = useAuth();
+  const dashboardTheme = "user";
 
   const handleLogout = async () => {
+    setIsLoggingOut(true);
     await logout();
     navigate("/");
   };
@@ -49,6 +51,36 @@ export const Dashboard: React.FC = () => {
     { value: "dp", label: "Dynamic Programming" },
   ];
 
+  const topItems = [
+    {
+      key: "home",
+      label: "Home",
+      active: location.pathname === "/dashboard",
+      onClick: () => navigate("/dashboard"),
+    },
+    {
+      key: "questions",
+      label: "Questions",
+      active: location.pathname.startsWith("/questions"),
+      onClick: () => navigate("/questions"),
+    },
+    {
+      key: "friends",
+      label: "Friends",
+      active: location.pathname.startsWith("/friends"),
+      onClick: () => navigate("/friends"),
+    },
+  ];
+
+  const bottomItems = [
+    {
+      key: "logout",
+      label: "Logout",
+      onClick: () => handleLogout(),
+      isLoading: isLoggingOut,
+    },
+  ];
+
   return (
     <div className="animate-fade-in">
       <AppShell
@@ -59,33 +91,8 @@ export const Dashboard: React.FC = () => {
           <Sidebar
             theme={dashboardTheme}
             isOpen={isSidebarOpen}
-            topItems={[
-              {
-                key: "home",
-                label: "Home",
-                active: activePage === "home",
-                onClick: () => setActivePage("home"),
-              },
-              {
-                key: "questions",
-                label: "Questions",
-                active: activePage === "questions",
-                onClick: () => setActivePage("questions"),
-              },
-              {
-                key: "friends",
-                label: "Friends",
-                active: activePage === "friends",
-                onClick: () => setActivePage("friends"),
-              },
-            ]}
-            bottomItems={[
-              {
-                key: "logout",
-                label: "Logout",
-                onClick: () => handleLogout(),
-              },
-            ]}
+            topItems={topItems}
+            bottomItems={bottomItems}
           />
         }
         header={
@@ -153,69 +160,6 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </AppShell>
-      {/* <Header logo brandName profile signout />
-      <main className="dashboard-content">
-        <div className="dashboard-header flex-col flex-center">
-          <h1 className="dashboard-title">Ready to Practice?</h1>
-          <p className="dashboard-subtitle">
-            Select your preferred topic and difficulty to find a peer for your
-            next mock interview.
-          </p>
-        </div>
-
-        <div className="dashboard-cards">
-          <CardLight glow className="selection-card">
-            <div className="flex flex-row">
-              <Target className="h-6 w-6 mr-2 text-accent-primary" />
-              <h2 className="card-title flex-center">Configure Session</h2>
-            </div>
-
-            <div className="form-group">
-              <Select
-                label="Interview Topic"
-                placeholder="Select Topic"
-                options={topicOptions}
-                value={topic}
-                onChange={setTopic}
-                leftIcon={<BookOpen className="h-5 w-5" />}
-              />
-
-              <Select
-                label="Difficulty Level"
-                placeholder="Select Difficulty"
-                options={difficultyOptions}
-                value={difficulty}
-                onChange={setDifficulty}
-                leftIcon={<CircleGauge className="h-5 w-5" />}
-              />
-            </div>
-
-            <Button
-              size="lg"
-              className="w-full mt-8"
-              disabled={!difficulty || !topic}
-              onClick={handleStartMatching}
-              rightIcon={<Play className="h-5 w-5" />}
-            >
-              Find a Match
-            </Button>
-          </CardLight>
-
-          <div className="dashboard-stats flex-col">
-            <CardLight className="stat-card">
-              <h3>Recent Topics</h3>
-              <div className="tags">
-                <span className="tag">Arrays</span>
-                <span className="tag">Trees</span>
-              </div>
-            </CardLight>
-            <CardLight className="stat-card mt-4">
-              <h3>Sessions Completed</h3>
-              <div className="stat-number">12</div>
-            </CardLight>
-          </div>
-        </div>
-      </main> */}
     </div>
   );
 };

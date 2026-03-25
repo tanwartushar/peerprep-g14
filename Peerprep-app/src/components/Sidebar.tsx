@@ -10,6 +10,7 @@ export interface SidebarItem {
   icon?: React.ReactNode;
   onClick?: () => void;
   active?: boolean;
+  isLoading?: boolean;
 }
 
 interface SidebarProps {
@@ -73,6 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             theme={theme}
             variant="solid"
             size="sm"
+            isLoading={item.isLoading}
             selected={item.active}
             onClick={item.onClick}
             leftIcon={item.icon}

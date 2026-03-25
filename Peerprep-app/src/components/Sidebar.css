@@ -7,7 +7,7 @@
   background-color: var(--neutral-950);
 }
 
-/* theme tokens for sidebar itself */
+/* theme tokens */
 .sidebar--user {
   --sidebar-accent: var(--user-400);
   --sidebar-accent-rgb: var(--user-800-rgb);
@@ -52,7 +52,7 @@
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 0;
-  border-top: 1px solid rgb(var(--sidebar-accent-rgb) / var(--opacity-strong));
+  border-top: 1px solid rgb(var(--sidebar-accent-rgb) / 1);
 }
 
 .sidebar__spacer {
