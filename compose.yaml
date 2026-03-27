@@ -112,3 +112,41 @@ services:
   #   image: mongo:latest            # Or postgres, redis, etc.
   #   ports:
   #     - "27017:27017"
+
+  # --- COLLABORATION SERVICE ---
+  collaboration-service:
+    ports:
+      - "3004:3004"
+    env_file:
+      - ./services/collaboration-service/.env
+    build:
+      context: ./services/collaboration-service
+      dockerfile: Dockerfile
+    tty: true
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/collaboration-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/collaboration-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/collaboration-service/package.json
+    depends_on:
+      - collaboration-db
+
+  collaboration-db:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: collaboration_db
+    volumes:
+      - collaboration_db_data:/var/lib/postgresql/data
+
+volumes:
+  collaboration_db_data:
