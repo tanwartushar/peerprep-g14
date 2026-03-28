@@ -1,0 +1,52 @@
+import { Router, type Request, type Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const router = Router();
+const prisma = new PrismaClient();
+
+// POST /api/collaboration/sessions
+router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { user1Id, user2Id, questionId, language } = req.body;
+    
+    if (!user1Id || !user2Id || !questionId || !language) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const session = await prisma.session.create({
+      data: {
+        user1Id,
+        user2Id,
+        questionId,
+        language
+      }
+    });
+
+    return res.status(201).json(session);
+  } catch (error) {
+    console.error('Failed to create session:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET /api/collaboration/sessions/:id
+router.get('/sessions/:id', async (req: Request, res: Response): Promise<any> => {
+  try {
+    const sessionId = req.params.id;
+    
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    return res.status(200).json(session);
+  } catch (error) {
+    console.error('Failed to get session:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+export default router;
