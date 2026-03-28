@@ -1,16 +1,16 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
-import { Card } from "../components/Card";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
-import { Header } from "../components/Header";
+import Card from "../components/Card";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
+  const dashboardTheme = "user";
 
   const handleStartMatching = () => {
     if (difficulty && topic) {
@@ -37,25 +37,17 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="dashboard-layout animate-fade-in">
-      <Header logo brandName profile signout />
-
-      <main className="dashboard-content">
-        <div className="dashboard-header flex-col flex-center">
-          <h1 className="dashboard-title">Ready to Practice?</h1>
-          <p className="dashboard-subtitle">
-            Select your preferred topic and difficulty to find a peer for your
-            next mock interview.
-          </p>
-        </div>
-
-        <div className="dashboard-cards">
-          <Card glow className="selection-card">
-            <div className="flex flex-row">
-              <Target className="h-6 w-6 mr-2 text-accent-primary" />
-              <h2 className="card-title flex-center">Configure Session</h2>
-            </div>
-
+    <div className="animate-fade-in">
+      <div className="dashboard-layout">
+        <div className="dashboard-main-container">
+          <Card
+            theme={dashboardTheme}
+            logo={<Target className="h-5 w-5" />}
+            title="Configure Session"
+            headerAlign="left"
+            showDivider
+            className="dashboard-content"
+          >
             <div className="form-group">
               <Select
                 label="Interview Topic"
@@ -72,13 +64,16 @@ export const Dashboard: React.FC = () => {
                 options={difficultyOptions}
                 value={difficulty}
                 onChange={setDifficulty}
+                className="mt-8"
                 leftIcon={<CircleGauge className="h-5 w-5" />}
               />
             </div>
 
             <Button
-              size="lg"
-              className="w-full mt-8"
+              size="md"
+              variant="solid"
+              theme="user"
+              className="mt-8"
               disabled={!difficulty || !topic}
               onClick={handleStartMatching}
               rightIcon={<Play className="h-5 w-5" />}
@@ -86,22 +81,19 @@ export const Dashboard: React.FC = () => {
               Find a Match
             </Button>
           </Card>
-
-          <div className="dashboard-stats flex-col">
-            <Card className="stat-card">
-              <h3>Recent Topics</h3>
-              <div className="tags">
-                <span className="tag">Arrays</span>
-                <span className="tag">Trees</span>
-              </div>
-            </Card>
-            <Card className="stat-card mt-4">
-              <h3>Sessions Completed</h3>
-              <div className="stat-number">12</div>
-            </Card>
-          </div>
         </div>
-      </main>
+        <div className="dashboard-right-container">
+          <Card
+            theme={dashboardTheme}
+            title={<div className="dashboard-title">Sessions Completed</div>}
+            headerAlign="left"
+            showDivider
+            className="dashboard-content"
+          >
+            <div className="stat-number">12</div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 };

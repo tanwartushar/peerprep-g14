@@ -17,6 +17,7 @@ interface MultiSelectProps {
   placeholder?: string;
   className?: string;
   id?: string;
+  theme?: "user" | "admin";
 }
 
 export const MultiSelect: React.FC<MultiSelectProps> = ({
@@ -29,6 +30,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   placeholder = "Select options",
   className = "",
   id,
+  theme = "user",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const generatedId = id || Math.random().toString(36).substring(7);
@@ -45,10 +47,7 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
     };
 
     document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const selectedLabels = useMemo(() => {
@@ -68,7 +67,10 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
   return (
     <div className={`multi-select-wrapper ${className}`}>
       {label && (
-        <label htmlFor={generatedId} className="multi-select-label">
+        <label
+          htmlFor={generatedId}
+          className={`multi-select-label multi-select-label--${theme}`}
+        >
           {label}
         </label>
       )}
@@ -77,18 +79,33 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
         <button
           type="button"
           id={generatedId}
-          className={`multi-select-trigger ${error ? "multi-select-error" : ""}`}
+          className={[
+            "multi-select-trigger",
+            `multi-select-trigger--${theme}`,
+            error ? "multi-select-error" : "",
+            isOpen ? "is-open" : "",
+            selectedLabels.length > 0 ? "has-value" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           onClick={() => setIsOpen((prev) => !prev)}
         >
           <div className="multi-select-trigger-content">
             {leftIcon && (
-              <div className="multi-select-icon-left">{leftIcon}</div>
+              <div
+                className={`multi-select-icon-left multi-select-icon-left--${theme}`}
+              >
+                {leftIcon}
+              </div>
             )}
 
-            <div className={`multi-select-value ${leftIcon && "pl-6"}`}>
+            <div className={`multi-select-value ${leftIcon ? "pl-8" : ""}`}>
               {selectedLabels.length > 0 ? (
                 selectedLabels.map((label) => (
-                  <span key={label} className="multi-select-chip">
+                  <span
+                    key={label}
+                    className={`multi-select-chip multi-select-chip--${theme}`}
+                  >
                     {label}
                   </span>
                 ))
@@ -98,13 +115,17 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
             </div>
           </div>
 
-          <div className="select-icon-right">
-            <ChevronDown className="h-4 w-4 text-muted" />
+          <div
+            className={`multi-select-icon-right multi-select-icon-right--${theme}`}
+          >
+            <ChevronDown className="h-4 w-4" />
           </div>
         </button>
 
         {isOpen && (
-          <div className="multi-select-dropdown">
+          <div
+            className={`multi-select-dropdown multi-select-dropdown--${theme}`}
+          >
             {options.map((option) => {
               const isSelected = value.includes(option.value);
 
@@ -112,7 +133,13 @@ export const MultiSelect: React.FC<MultiSelectProps> = ({
                 <button
                   type="button"
                   key={option.value}
-                  className={`multi-select-option ${isSelected ? "selected" : ""}`}
+                  className={[
+                    "multi-select-option",
+                    `multi-select-option--${theme}`,
+                    isSelected ? "selected" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   onClick={() => toggleOption(option.value)}
                 >
                   <span>{option.label}</span>
