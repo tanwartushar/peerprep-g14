@@ -1,94 +1,141 @@
-.header {
+.app-shell-header {
+  width: 100%;
+  min-width: 0;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-
-  height: 40px;
-
-  padding: 1rem;
-
-  background-color: var(--bg-secondary);
-}
-
-.header-admin {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-
-  height: 40px;
-
-  padding: 1rem;
-
-  background-color: var(--bg-tertiary);
-}
-
-.brand-container {
-  display: flex;
-  align-items: center;
-
   gap: 1rem;
 }
 
-.brand-icon-sm {
-  background: var(--accent-primary);
-  padding: 0.4rem;
-  border-radius: var(--radius-md);
+.app-shell-header--user {
+  --header-text: var(--user-200);
+  --header-profile-bg: var(--user-200);
+  --header-profile-fg: var(--user-800);
+  --header-profile-outline: var(--user-600);
+
+  --header-toggle-line: var(--user-200);
+  --header-toggle-bg: rgb(var(--user-800-rgb) / 0.2);
+  --header-accent-rgb: var(--user-800-rgb);
+  --header-accent-soft: var(--user-400);
+}
+
+.app-shell-header--admin {
+  --header-text: var(--admin-200);
+  --header-profile-bg: var(--admin-200);
+  --header-profile-fg: var(--admin-800);
+  --header-profile-outline: var(--admin-600);
+
+  --header-toggle-line: var(--admin-200);
+  --header-toggle-bg: rgb(var(--admin-800-rgb) / 0.2);
+  --header-accent-rgb: var(--admin-800-rgb);
+  --header-accent-soft: var(--admin-400);
+}
+
+.app-shell-header__left,
+.app-shell-header__right {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.brand-text-header {
-  color: var(--text-primary);
-  font-family: var(--font-pixel);
-  font-weight: 900;
-  font-size: 150%;
-}
-
-.right-side {
-  display: flex;
-
   gap: 1rem;
 }
 
-.load-profile-container-row {
+.app-shell-header__left {
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-
   gap: 1rem;
+  align-items: center;
 }
 
-.loading-profile-text {
-  color: var(--text-primary);
+.app-shell-header__page-name {
   font-family: var(--font-normal);
-  font-size: 80%;
-  text-align: center;
+  font-weight: var(--fw-thin);
+  color: var(--header-text);
+  font-size: 0.875rem;
+  font-style: italic;
 }
 
-.profile-container {
-  display: flex;
-  align-items: center;
-
-  gap: 1rem;
+.app-shell-header__right {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-end;
 }
 
-.profile-picture {
-  display: flex;
+.app-shell-header__toggle {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  flex-shrink: 0;
+
+  display: inline-flex;
+  flex-direction: column;
   justify-content: center;
-
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-
-  padding: 0.5rem;
-
-  background-color: var(--text-primary);
-  color: var(--bg-secondary);
+  align-items: center;
+  gap: 4px;
 
   border-radius: var(--radius-full);
+  border: 1px solid rgb(var(--header-accent-rgb) / 1);
+  background: var(--header-toggle-bg);
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
-.user-name {
+.app-shell-header__toggle:hover {
+  transform: translateY(-1px);
+  border: 1px solid var(--header-accent-soft);
+}
+
+.app-shell-header__toggle-icon {
+  color: var(--header-toggle-line);
+}
+
+.app-shell-header__profile {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.app-shell-header__loading {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-shell-header__loading-text {
+  display: flex;
+  color: var(--header-text);
   font-family: var(--font-normal);
-  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.app-shell-header__user-name {
+  font-family: var(--font-normal);
+  color: var(--header-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  max-width: 260px;
+}
+
+.app-shell-header__profile-picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+
+  border: 2px solid;
+
+  background-color: var(--header-profile-bg);
+  color: var(--header-profile-fg);
+  border-radius: var(--radius-full);
+  border-color: var(--header-profile-outline);
 }

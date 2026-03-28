@@ -1,46 +1,65 @@
-import React from 'react';
-import { Loader2 } from 'lucide-react';
-import './Button.css';
+import React from "react";
+import "./Button.css";
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+type ButtonTheme = "user" | "admin" | "neutral";
+type ButtonVariant = "solid" | "selection" | "ghost";
+type ButtonSize = "sm" | "md" | "lg";
+
+interface ButtonProps extends Omit<
+  React.ButtonHTMLAttributes<HTMLButtonElement>,
+  "type"
+> {
+  children: React.ReactNode;
+  theme?: ButtonTheme;
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  selected?: boolean;
+  fullWidth?: boolean;
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  type?: "button" | "submit" | "reset";
 }
 
 export const Button: React.FC<ButtonProps> = ({
   children,
-  variant = 'primary',
-  size = 'md',
+  theme = "neutral",
+  variant = "solid",
+  size = "md",
+  selected = false,
+  fullWidth = false,
   isLoading = false,
   leftIcon,
   rightIcon,
-  className = '',
+  className = "",
   disabled,
+  type = "button",
   ...props
 }) => {
-  const baseClass = 'btn';
-  const variantClass = `btn-${variant}`;
-  const sizeClass = `btn-${size}`;
-  const loadingClass = isLoading ? 'btn-loading' : '';
+  const classes = [
+    "pp-btn",
+    `pp-btn--${theme}`,
+    `pp-btn--${variant}`,
+    `pp-btn--${size}`,
+    selected ? "is-selected" : "",
+    fullWidth ? "pp-btn--full-width" : "",
+    isLoading ? "is-loading" : "",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <button
-      className={`${baseClass} ${variantClass} ${sizeClass} ${loadingClass} ${className}`}
-      disabled={isLoading || disabled}
+      type={type}
+      className={classes}
+      disabled={disabled || isLoading}
+      aria-pressed={variant === "selection" ? selected : undefined}
       {...props}
     >
-      {isLoading ? (
-        <Loader2 className="animate-spin mr-2 h-4 w-4" />
-      ) : leftIcon ? (
-        <span className="mr-2 flex items-center">{leftIcon}</span>
-      ) : null}
-      <span className="btn-text">{children}</span>
-      {!isLoading && rightIcon && (
-        <span className="ml-2 flex items-center">{rightIcon}</span>
-      )}
+      {leftIcon && <span className="pp-btn__icon">{leftIcon}</span>}
+      <span className="pp-btn__label">{children}</span>
+      {rightIcon && <span className="pp-btn__icon">{rightIcon}</span>}
     </button>
   );
 };

@@ -5,15 +5,18 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { Matching } from "./pages/Matching";
 import { Workspace } from "./pages/Workspace";
-import { AdminDashboard } from "./pages/AdminDashboard";
+// import { AdminDashboard } from "./pages/AdminDashboard";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Query, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./App.css";
+import { Login } from "./pages/Login";
+import Questions from "./pages/Questions";
+import UserLayout from "./layouts/UserLayout";
+import AdminLayout from "./layouts/AdminLayout";
 
 // A component to protect routes that require authentication
 const ProtectedRoute: React.FC<{
@@ -35,7 +38,7 @@ const ProtectedRoute: React.FC<{
   }
 
   if (adminOnly && userRole !== "ADMIN") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/user/dashboard" replace />;
   }
 
   return <>{children}</>;
@@ -55,9 +58,9 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (isAuthenticated) {
     return userRole === "ADMIN" ? (
-      <Navigate to="/admin" replace />
+      <Navigate to="/admin/questions" replace />
     ) : (
-      <Navigate to="/dashboard" replace />
+      <Navigate to="/user/dashboard" replace />
     );
   }
 
@@ -89,15 +92,44 @@ const App: React.FC = () => {
                   }
                 />
 
-                {/* Protected routes */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route element={<UserLayout />}>
+                  {/* Protected routes */}
+                  {/* User routes */}
+                  <Route
+                    path="/user/dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <Dashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/user/questions"
+                    element={
+                      <ProtectedRoute>
+                        <Questions theme="user" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workspace"
+                    element={
+                      <ProtectedRoute>
+                        <Workspace />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/profile-setup"
+                    element={
+                      <ProtectedRoute>
+                        <ProfileSetup />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* User routes w/o AppShell */}
                 <Route
                   path="/matching"
                   element={
@@ -106,32 +138,18 @@ const App: React.FC = () => {
                     </ProtectedRoute>
                   }
                 />
-                <Route
-                  path="/workspace"
-                  element={
-                    <ProtectedRoute>
-                      <Workspace />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/profile-setup"
-                  element={
-                    <ProtectedRoute>
-                      <ProfileSetup />
-                    </ProtectedRoute>
-                  }
-                />
 
-                {/* Admin route */}
-                <Route
-                  path="/admin"
-                  element={
-                    <ProtectedRoute adminOnly>
-                      <AdminDashboard />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Admin routes */}
+                <Route element={<AdminLayout />}>
+                  <Route
+                    path="/admin/questions"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <Questions theme="admin" />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
 
                 {/* Fallback route */}
                 <Route path="*" element={<Navigate to="/" replace />} />

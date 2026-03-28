@@ -4,11 +4,10 @@ import { Mail, Lock } from "lucide-react";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 import { useAuth } from "../context/AuthContext";
-import "./Login.css";
-import "../layouts/Layout.css";
-import Card from "../components/Card";
+import "./LoginLight.css";
+import "../layout/Layout.css";
 
-export const Login: React.FC = () => {
+export const LoginLight: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -53,10 +52,10 @@ export const Login: React.FC = () => {
       // PeerPrep logic: Redirect based on admin status
       if (data.user?.role === "ADMIN" || isAdminMode) {
         login(data.user.id, data.user.role);
-        navigate("/admin/questions");
+        navigate("/admin");
       } else {
         login(data.user.id, data.user.role);
-        navigate("/user/dashboard");
+        navigate("/dashboard");
       }
     } catch (error: any) {
       alert(error.message);
@@ -66,120 +65,16 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="background-default page-shell">
-      <div
-        className={`dotted-card ${isAdminMode ? "dotted-card-admin" : "dotted-card-user"}`}
-      >
+    <div className="linear-gradient-background page-shell">
+      <div className="dotted-card">
         <div className="brand-panel">
-          <div className="brand-text">PeerPrep</div>
-          {isAdminMode ? (
-            <div className="brand-text-admin">Admin</div>
-          ) : (
-            <div className="subtittle-text">
-              Preparing you for your next interview
-            </div>
-          )}
-          {/* <img src="/PeerPrep.png" alt="PeerPrep Logo" className="brand-logo" /> */}
+          <h1 className="brand-text">PeerPrep</h1>
+          <h4 className="subtittle-text">
+            Preparing you for your next interview
+          </h4>
+          <img src="/PeerPrep.png" alt="PeerPrep Logo" className="brand-logo" />
         </div>
-        <Card
-          theme={isAdminMode ? "admin" : "user"}
-          title="Welcome!"
-          subtitle={
-            isAdminMode
-              ? "Ready to manage PeerPrep?"
-              : "Ready to prep for your next interview?"
-          }
-          headerAlign="center"
-          showDivider
-          floating
-          className="auth-panel"
-          contentClassName="auth-panel-content"
-        >
-          {/* Role selector */}
-          <div className="role-select-container">
-            <Button
-              theme={isAdminMode ? "admin" : "user"}
-              variant="selection"
-              selected={!isAdminMode}
-              onClick={() => setIsAdminMode(false)}
-            >
-              User
-            </Button>
-            <Button
-              theme={isAdminMode ? "admin" : "user"}
-              variant="selection"
-              selected={isAdminMode}
-              onClick={() => setIsAdminMode(true)}
-            >
-              Admin
-            </Button>
-          </div>
-
-          {/* Info form */}
-          <form className="login-form">
-            {!isAdminMode && (
-              <>
-                <Button
-                  type="button" // Important: prevents handleSubmit from firing
-                  onClick={handleLogin} // Your window.location.href function
-                  variant="solid"
-                  size="sm"
-                  theme="user"
-                  isLoading={isLoading}
-                >
-                  <span>Sign in with GitHub</span>
-                </Button>
-              </>
-            )}
-
-            {isAdminMode && (
-              <>
-                <Input
-                  label="Email Address"
-                  type="email"
-                  variant="solid"
-                  theme="admin"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@peerprep.com"
-                  leftIcon={<Mail className="h-5 w-5" />}
-                  required
-                />
-                <Input
-                  label="Password"
-                  type="password"
-                  variant="solid"
-                  theme="admin"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  leftIcon={<Lock className="h-5 w-5" />}
-                  required
-                />
-              </>
-            )}
-          </form>
-
-          {/* Footer */}
-          <div className="login-footer">
-            {!isAdminMode ? (
-              <div className="login-footer-text">
-                Secure login provided by GitHub OAuth
-              </div>
-            ) : (
-              <Button
-                theme="admin"
-                size="sm"
-                variant="solid"
-                isLoading={isLoading}
-                onClick={handleSubmit}
-              >
-                Sign in
-              </Button>
-            )}
-          </div>
-        </Card>
-        {/* <div className="auth-panel">
+        <div className="auth-panel">
           <h1 className="welcome-text">Welcome!</h1>
           <h3 className="welcome-text">
             {isAdminMode
@@ -188,7 +83,7 @@ export const Login: React.FC = () => {
           </h3>
           <div className="welcome-line" />
 
-          Role selector
+          {/* Role selector */}
           <div className="role-select-container">
             <button
               type="button"
@@ -205,7 +100,7 @@ export const Login: React.FC = () => {
             </button>
           </div>
 
-          Info form
+          {/* Info form */}
           <form className="login-form">
             {!isAdminMode && (
               <>
@@ -246,7 +141,7 @@ export const Login: React.FC = () => {
             )}
           </form>
 
-          Footer
+          {/* Footer */}
           <div className="login-footer">
             {!isAdminMode ? (
               <p className="text-xs text-center text-secondary">
@@ -265,7 +160,7 @@ export const Login: React.FC = () => {
               </Button>
             )}
           </div>
-        </div> */}
+        </div>
       </div>
     </div>
   );
