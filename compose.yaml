@@ -18,6 +18,7 @@ services:
       - frontend
       - user-service
       - question-service
+      - matching-service
 
   auth-service:
     ports:
@@ -77,11 +78,27 @@ services:
         - action: rebuild
           path: ./services/user-service/package.json
 
-  # --- SERVICE 2 (e.g., Matching Service) ---
-  # matching-service:
-  #   build:
-  #     context: ./matching-service
-  #     dockerfile: Dockerfile
+  # --- MATCHING SERVICE ---
+  matching-service:
+    ports:
+      - "3003:3003"
+    build:
+      context: ./services/matching-service
+      dockerfile: Dockerfile
+    tty: true
+    env_file:
+      - ./services/matching-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/matching-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/matching-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/matching-service/package.json
 
   # --- SERVICE 3 (e.g., Question Service) ---
   question-service:

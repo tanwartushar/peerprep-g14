@@ -1,20 +1,61 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
+import { BookOpen, Target, Play, CircleGauge, Code2 } from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
 import Card from "../components/Card";
+import { useAuth } from "../context/AuthContext";
+import { createMatchRequest } from "../api/matching";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { userId, isLoading } = useAuth();
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
+  const [programmingLanguage, setProgrammingLanguage] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
 
-  const handleStartMatching = () => {
-    if (difficulty && topic) {
-      navigate("/matching", { state: { difficulty, topic } });
+  const handleStartMatching = async () => {
+    setSubmitError(null);
+    if (!difficulty || !topic || !programmingLanguage) return;
+    if (!userId) {
+      setSubmitError("Sign in to find a match.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const result = await createMatchRequest(userId, {
+        topic,
+        difficulty,
+        programmingLanguage,
+      });
+      if (result.ok) {
+        navigate("/matching", {
+          state: {
+            difficulty,
+            topic,
+            programmingLanguage,
+            requestId: result.data.id,
+          },
+        });
+        return;
+      }
+      if (result.status === 409) {
+        setSubmitError(
+          "You already have an active match request. Cancel it from the matching screen or wait.",
+        );
+        return;
+      }
+      setSubmitError(result.message || "Could not start matching.");
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Unexpected error starting match.";
+      setSubmitError(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -34,6 +75,15 @@ export const Dashboard: React.FC = () => {
     { value: "trees", label: "Trees" },
     { value: "graphs", label: "Graphs" },
     { value: "dp", label: "Dynamic Programming" },
+  ];
+
+  const languageOptions = [
+    { value: "javascript", label: "JavaScript" },
+    { value: "typescript", label: "TypeScript" },
+    { value: "python", label: "Python" },
+    { value: "java", label: "Java" },
+    { value: "cpp", label: "C++" },
+    { value: "go", label: "Go" },
   ];
 
   return (
@@ -67,18 +117,40 @@ export const Dashboard: React.FC = () => {
                 className="mt-8"
                 leftIcon={<CircleGauge className="h-5 w-5" />}
               />
+
+              <Select
+                label="Programming Language"
+                placeholder="Select Language"
+                options={languageOptions}
+                value={programmingLanguage}
+                onChange={setProgrammingLanguage}
+                className="mt-8"
+                leftIcon={<Code2 className="h-5 w-5" />}
+              />
             </div>
+
+            {submitError ? (
+              <p className="dashboard-match-error" role="alert">
+                {submitError}
+              </p>
+            ) : null}
 
             <Button
               size="md"
               variant="solid"
               theme="user"
               className="mt-8"
-              disabled={!difficulty || !topic}
-              onClick={handleStartMatching}
+              disabled={
+                !difficulty ||
+                !topic ||
+                !programmingLanguage ||
+                isLoading ||
+                isSubmitting
+              }
+              onClick={() => void handleStartMatching()}
               rightIcon={<Play className="h-5 w-5" />}
             >
-              Find a Match
+              {isSubmitting ? "Starting…" : "Find a Match"}
             </Button>
           </Card>
         </div>

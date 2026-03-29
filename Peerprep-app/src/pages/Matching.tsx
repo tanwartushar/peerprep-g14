@@ -4,21 +4,28 @@ import { Users, X } from "lucide-react";
 import { Button } from "../components/Button";
 import "./Matching.css";
 import Card from "../components/Card";
+import { useAuth } from "../context/AuthContext";
+import { cancelMatchRequest } from "../api/matching";
 
 interface LocationState {
   difficulty?: string;
   topic?: string;
+  programmingLanguage?: string;
+  requestId?: string;
 }
 
 export const Matching: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
+  const { userId } = useAuth();
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
-    if (!state?.difficulty || !state?.topic) {
+    if (!state?.difficulty || !state?.topic || !state?.requestId) {
       navigate("/dashboard");
       return;
     }
@@ -37,8 +44,23 @@ export const Matching: React.FC = () => {
     };
   }, [navigate, state]);
 
-  const handleCancel = () => {
-    navigate("/dashboard");
+  const handleCancel = async () => {
+    setCancelError(null);
+    if (!state?.requestId || !userId) {
+      navigate("/dashboard");
+      return;
+    }
+    setIsCancelling(true);
+    try {
+      const result = await cancelMatchRequest(userId, state.requestId);
+      if (!result.ok) {
+        setCancelError(result.message);
+        return;
+      }
+      navigate("/dashboard");
+    } finally {
+      setIsCancelling(false);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -76,6 +98,13 @@ export const Matching: React.FC = () => {
                     {state?.difficulty || "Any"}
                   </span>
                 </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">Language</span>
+                  <span className="detail-value">
+                    {state?.programmingLanguage || "—"}
+                  </span>
+                </div>
               </div>
 
               <div className="matching-timer">
@@ -84,13 +113,19 @@ export const Matching: React.FC = () => {
               </div>
 
               <div className="matching-actions">
+                {cancelError ? (
+                  <p className="matching-cancel-error" role="alert">
+                    {cancelError}
+                  </p>
+                ) : null}
                 <Button
                   theme="user"
                   variant="ghost"
-                  onClick={handleCancel}
+                  onClick={() => void handleCancel()}
+                  disabled={isCancelling}
                   leftIcon={<X className="h-4 w-4" />}
                 >
-                  Cancel Search
+                  {isCancelling ? "Cancelling…" : "Cancel Search"}
                 </Button>
               </div>
             </div>

@@ -1,0 +1,29 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MatchRequestStatus {
+  PENDING
+  MATCHED
+  CANCELLED
+}
+
+/// Active pool = status PENDING; pool key is (topic, programmingLanguage).
+model MatchRequest {
+  id                  String              @id @default(uuid())
+  userId              String
+  topic               String
+  difficulty          String
+  programmingLanguage String
+  status              MatchRequestStatus  @default(PENDING)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@unique([userId], map: "MatchRequest_one_pending_per_user", where: { status: "PENDING" })
+  @@index([topic, programmingLanguage])
+}
