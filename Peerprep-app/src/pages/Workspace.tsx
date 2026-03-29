@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Code2, Layout, Settings, LogOut, MessageSquare, Play } from 'lucide-react';
 import { Button } from '../components/Button';
+import { CodeEditor } from '../components/CodeEditor';
+import { useCurrentUserProfile } from '../hooks/useCurrentUserProfile';
 import './Workspace.css';
 
 interface LocationState {
@@ -13,6 +15,16 @@ export const Workspace: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const state = location.state as LocationState;
+
+    const { data: profile } = useCurrentUserProfile();
+    const currentUser = React.useMemo(() => {
+        const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea', '#ed64a6'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        return {
+            name: profile?.name || 'Peer',
+            color: randomColor
+        };
+    }, [profile?.name]);
 
     const [code, setCode] = useState('// Write your solution here...\n\nfunction solution() {\n  \n}');
 
@@ -107,17 +119,11 @@ export const Workspace: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="editor-content">
-                        <div className="line-numbers">
-                            {code.split('\n').map((_, i) => (
-                                <div key={i} className="line-number">{i + 1}</div>
-                            ))}
-                        </div>
-                        <textarea
-                            className="code-textarea"
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                            spellCheck="false"
+                    <div className="editor-content" style={{ overflow: 'hidden' }}>
+                        <CodeEditor 
+                            value={code} 
+                            onChange={(val) => setCode(val || '')} 
+                            currentUser={currentUser}
                         />
                     </div>
 
