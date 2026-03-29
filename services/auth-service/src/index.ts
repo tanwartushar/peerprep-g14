@@ -122,12 +122,24 @@ app.use('/api/questions', verifyGateway, createProxyMiddleware({
   pathRewrite: { '^/api/questions': '/' },
 }));
 
-// Route /api/collaboration to collaboration-service
-app.use('/api/collaboration', verifyGateway, createProxyMiddleware({
+
+const collabProxy = createProxyMiddleware({
   target: 'http://collaboration-service:3004',
   changeOrigin: true,
   ws: true, // for WebSockets
-}));
+});
 
+// Route /api/collaboration to collaboration-service
+app.use('/api/collaboration', verifyGateway, collabProxy);
 
-app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
+const server = app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
+
+// Handle WebSocket Upgrades
+server.on('upgrade', (req: any, socket: any, head: any) => {
+  console.log(`[UPGRADE REQUEST] ${req.url}`);
+  if (req.url && req.url.startsWith('/api/collaboration')) {
+    collabProxy.upgrade(req, socket, head);
+  } else {
+    socket.destroy();
+  }
+});
