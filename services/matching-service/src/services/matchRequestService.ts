@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../prisma.js";
+import {
+  getMatchTimeoutSeconds,
+  MATCH_REQUEST_TIMEOUT_MESSAGE,
+} from "../config/matchTimeout.js";
 import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
 import { findFirstPair } from "./matchingEngine.js";
 
@@ -17,7 +21,7 @@ export type MatchRequestDTO = {
   allowLowerDifficultyMatch: boolean;
   /** F2 — your preference; null if not set */
   timeAvailableMinutes: number | null;
-  status: "PENDING" | "MATCHED" | "CANCELLED";
+  status: "PENDING" | "MATCHED" | "CANCELLED" | "TIMED_OUT";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: MatchPeerDTO | null;
@@ -29,6 +33,8 @@ export type MatchRequestDTO = {
   matchedTimeAvailableMinutes: number | null;
   /** Present when MATCHED with a peer */
   matchingType: "same_difficulty" | "downward" | null;
+  /** F8 — present when status is TIMED_OUT */
+  message: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -48,6 +54,27 @@ function computedMatchedTimeMinutes(
   return null;
 }
 
+function pendingExpiryCutoff(): Date {
+  const sec = getMatchTimeoutSeconds();
+  return new Date(Date.now() - sec * 1000);
+}
+
+/**
+ * Marks stale PENDING rows as TIMED_OUT (F8). Call before matching and on poll.
+ */
+async function expireStalePendingRequests(
+  tx: Prisma.TransactionClient | typeof prisma,
+): Promise<void> {
+  const cutoff = pendingExpiryCutoff();
+  await tx.matchRequest.updateMany({
+    where: {
+      status: "PENDING",
+      createdAt: { lt: cutoff },
+    },
+    data: { status: "TIMED_OUT" },
+  });
+}
+
 function toDTO(row: {
   id: string;
   userId: string;
@@ -56,7 +83,7 @@ function toDTO(row: {
   programmingLanguage: string;
   allowLowerDifficultyMatch: boolean;
   timeAvailableMinutes: number | null;
-  status: "PENDING" | "MATCHED" | "CANCELLED";
+  status: "PENDING" | "MATCHED" | "CANCELLED" | "TIMED_OUT";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peerRequestedDifficulty: string | null;
@@ -96,6 +123,7 @@ function toDTO(row: {
     peerTimeAvailableMinutes: row.peerTimeAvailableMinutes,
     matchedTimeAvailableMinutes,
     matchingType: matchingPairTypeToApi(row.matchingPairType),
+    message: row.status === "TIMED_OUT" ? MATCH_REQUEST_TIMEOUT_MESSAGE : null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -107,6 +135,8 @@ function toDTO(row: {
  */
 export async function tryMatchQueue(): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    await expireStalePendingRequests(tx);
+
     const pending = await tx.matchRequest.findMany({
       where: { status: "PENDING" },
     });
@@ -179,6 +209,8 @@ export async function createMatchRequest(
   input: CreateMatchRequestInput,
 ): Promise<{ ok: true; data: MatchRequestDTO } | { ok: false; code: "CONFLICT" }> {
   try {
+    await expireStalePendingRequests(prisma);
+
     const created = await prisma.matchRequest.create({
       data: {
         userId,
@@ -221,6 +253,8 @@ export async function getMatchRequestForUser(
   id: string,
   userId: string,
 ): Promise<MatchRequestDTO | null> {
+  await expireStalePendingRequests(prisma);
+
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId },
   });
@@ -234,6 +268,7 @@ export async function cancelMatchRequestForUser(
   | { ok: true; data: MatchRequestDTO }
   | { ok: false; code: "NOT_FOUND" }
   | { ok: false; code: "NOT_PENDING" }
+  | { ok: false; code: "TIMED_OUT" }
 > {
   const existing = await prisma.matchRequest.findFirst({
     where: { id, userId },
@@ -241,6 +276,9 @@ export async function cancelMatchRequestForUser(
 
   if (!existing) {
     return { ok: false, code: "NOT_FOUND" };
+  }
+  if (existing.status === "TIMED_OUT") {
+    return { ok: false, code: "TIMED_OUT" };
   }
   if (existing.status !== "PENDING") {
     return { ok: false, code: "NOT_PENDING" };

@@ -1,9 +1,7 @@
+import "dotenv/config";
 import express, { type Application } from "express";
 import cors, { type CorsOptions } from "cors";
-import dotenv from "dotenv";
 import matchingRouter from "./routes/matchingRoutes.js";
-
-dotenv.config();
 
 const app: Application = express();
 const PORT = Number.parseInt(process.env.PORT ?? "3003", 10);

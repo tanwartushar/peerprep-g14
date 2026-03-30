@@ -44,7 +44,9 @@ export type MatchRequestResponse = {
   allowLowerDifficultyMatch: boolean;
   /** F2 — optional minutes preference */
   timeAvailableMinutes: number | null;
-  status: "PENDING" | "MATCHED" | "CANCELLED";
+  status: "PENDING" | "MATCHED" | "CANCELLED" | "TIMED_OUT";
+  /** F8 — when status is TIMED_OUT */
+  message: string | null;
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: { userId: string; matchRequestId: string } | null;

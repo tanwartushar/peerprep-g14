@@ -11,6 +11,7 @@ enum MatchRequestStatus {
   PENDING
   MATCHED
   CANCELLED
+  TIMED_OUT
 }
 
 /// Set when status = MATCHED: same requested levels, or cross-level (downward from the harder requester’s perspective).

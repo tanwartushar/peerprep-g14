@@ -212,6 +212,27 @@
   opacity: 0.85;
 }
 
+.matching-hero--timeout {
+  min-height: 140px;
+  height: 140px;
+  width: 140px;
+}
+
+.matching-hero__core--timeout {
+  width: 88px;
+  height: 88px;
+  border-color: rgb(var(--user-400-rgb) / 0.45);
+}
+
+.matching-timeout-message {
+  margin: 0;
+  text-align: center;
+  line-height: 1.55;
+  color: var(--user-200);
+  opacity: 0.92;
+  max-width: 26rem;
+}
+
 @media (max-width: 640px) {
   .matching-layout {
     padding: 1rem;

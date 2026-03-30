@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Users, X } from "lucide-react";
+import { Users, X, Clock } from "lucide-react";
 import { Button } from "../components/Button";
 import "./Matching.css";
 import Card from "../components/Card";
@@ -31,12 +31,18 @@ export const Matching: React.FC = () => {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+  const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
 
   const effectiveUserId = getEffectiveMatchingUserId(userId);
 
   useEffect(() => {
     if (!state?.difficulty || !state?.topic || !state?.requestId) {
       navigate("/user/dashboard");
+      return;
+    }
+
+    if (timedOut) {
       return;
     }
 
@@ -47,7 +53,7 @@ export const Matching: React.FC = () => {
     return () => {
       clearInterval(timer);
     };
-  }, [navigate, state]);
+  }, [navigate, state, timedOut]);
 
   useEffect(() => {
     if (
@@ -56,6 +62,9 @@ export const Matching: React.FC = () => {
       !state.difficulty ||
       !state.topic
     ) {
+      return;
+    }
+    if (timedOut) {
       return;
     }
 
@@ -70,6 +79,14 @@ export const Matching: React.FC = () => {
       }
       setPollError(null);
       const data = result.data;
+      if (data.status === "TIMED_OUT") {
+        setTimedOut(true);
+        setTimeoutMessage(
+          data.message ??
+            "No match was found in time. You can try again from the dashboard.",
+        );
+        return;
+      }
       if (data.status === "MATCHED") {
         navigate("/workspace", {
           replace: true,
@@ -105,6 +122,7 @@ export const Matching: React.FC = () => {
     state?.programmingLanguage,
     state?.requestId,
     state?.topic,
+    timedOut,
   ]);
 
   const handleCancel = async () => {
@@ -137,86 +155,117 @@ export const Matching: React.FC = () => {
       <div className="matching-container">
         <Card theme="user" className="matching-card">
           <div className="matching-card__inner">
-            <div className="matching-hero">
-              <div className="matching-pulse-ring matching-pulse-ring--1" />
-              <div className="matching-pulse-ring matching-pulse-ring--2" />
-              <div className="matching-pulse-ring matching-pulse-ring--3" />
-
-              <div className="matching-hero__core">
-                <Users className="matching-hero__icon" />
-              </div>
-            </div>
-            <div className="matching-hero__title">Finding a Peer...</div>
-
-            <div className="matching-info">
-              <div className="matching-details">
-                <div className="detail-item">
-                  <span className="detail-label">Topic</span>
-                  <span className="detail-value">{state?.topic || "Any"}</span>
+            {timedOut ? (
+              <>
+                <div className="matching-hero matching-hero--timeout">
+                  <div className="matching-hero__core matching-hero__core--timeout">
+                    <Clock className="matching-hero__icon" />
+                  </div>
                 </div>
-
-                <div className="detail-item">
-                  <span className="detail-label">Difficulty</span>
-                  <span className="detail-value">
-                    {state?.difficulty || "Any"}
-                  </span>
-                </div>
-
-                <div className="detail-item">
-                  <span className="detail-label">Language</span>
-                  <span className="detail-value">
-                    {state?.programmingLanguage || "—"}
-                  </span>
-                </div>
-
-                <div className="detail-item">
-                  <span className="detail-label">Allow lower difficulty</span>
-                  <span className="detail-value">
-                    {state?.allowLowerDifficultyMatch ? "On" : "Off"}
-                  </span>
-                </div>
-
-                <div className="detail-item">
-                  <span className="detail-label">Time available</span>
-                  <span className="detail-value">
-                    {state?.timeAvailableMinutes != null
-                      ? `${state.timeAvailableMinutes} min`
-                      : "Not specified"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="matching-timer">
-                <span className="timer-text">{formatTime(secondsElapsed)}</span>
-                <p className="timer-subtext">
-                  Checking status every {POLL_MS / 1000}s
-                </p>
-              </div>
-
-              {pollError ? (
-                <p className="matching-poll-hint" role="status">
-                  {pollError}
-                  <span className="matching-poll-retry"> Will retry shortly.</span>
-                </p>
-              ) : null}
-
-              <div className="matching-actions">
-                {cancelError ? (
-                  <p className="matching-cancel-error" role="alert">
-                    {cancelError}
+                <div className="matching-hero__title">No match found in time</div>
+                <div className="matching-info">
+                  <p className="matching-timeout-message" role="status">
+                    {timeoutMessage}
                   </p>
-                ) : null}
-                <Button
-                  theme="user"
-                  variant="ghost"
-                  onClick={() => void handleCancel()}
-                  disabled={isCancelling}
-                  leftIcon={<X className="h-4 w-4" />}
-                >
-                  {isCancelling ? "Cancelling…" : "Cancel Search"}
-                </Button>
-              </div>
-            </div>
+                  <div className="matching-timer">
+                    <span className="timer-text">{formatTime(secondsElapsed)}</span>
+                    <p className="timer-subtext">Wait time before timeout</p>
+                  </div>
+                  <div className="matching-actions">
+                    <Button
+                      theme="user"
+                      variant="solid"
+                      onClick={() => navigate("/user/dashboard")}
+                    >
+                      Back to dashboard
+                    </Button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="matching-hero">
+                  <div className="matching-pulse-ring matching-pulse-ring--1" />
+                  <div className="matching-pulse-ring matching-pulse-ring--2" />
+                  <div className="matching-pulse-ring matching-pulse-ring--3" />
+
+                  <div className="matching-hero__core">
+                    <Users className="matching-hero__icon" />
+                  </div>
+                </div>
+                <div className="matching-hero__title">Finding a Peer...</div>
+
+                <div className="matching-info">
+                  <div className="matching-details">
+                    <div className="detail-item">
+                      <span className="detail-label">Topic</span>
+                      <span className="detail-value">{state?.topic || "Any"}</span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Difficulty</span>
+                      <span className="detail-value">
+                        {state?.difficulty || "Any"}
+                      </span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Language</span>
+                      <span className="detail-value">
+                        {state?.programmingLanguage || "—"}
+                      </span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Allow lower difficulty</span>
+                      <span className="detail-value">
+                        {state?.allowLowerDifficultyMatch ? "On" : "Off"}
+                      </span>
+                    </div>
+
+                    <div className="detail-item">
+                      <span className="detail-label">Time available</span>
+                      <span className="detail-value">
+                        {state?.timeAvailableMinutes != null
+                          ? `${state.timeAvailableMinutes} min`
+                          : "Not specified"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="matching-timer">
+                    <span className="timer-text">{formatTime(secondsElapsed)}</span>
+                    <p className="timer-subtext">
+                      Checking status every {POLL_MS / 1000}s
+                    </p>
+                  </div>
+
+                  {pollError ? (
+                    <p className="matching-poll-hint" role="status">
+                      {pollError}
+                      <span className="matching-poll-retry"> Will retry shortly.</span>
+                    </p>
+                  ) : null}
+
+                  <div className="matching-actions">
+                    {cancelError ? (
+                      <p className="matching-cancel-error" role="alert">
+                        {cancelError}
+                      </p>
+                    ) : null}
+                    <Button
+                      theme="user"
+                      variant="ghost"
+                      onClick={() => void handleCancel()}
+                      disabled={isCancelling}
+                      leftIcon={<X className="h-4 w-4" />}
+                    >
+                      {isCancelling ? "Cancelling…" : "Cancel Search"}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </Card>
       </div>

@@ -76,6 +76,13 @@ router.delete(
       res.status(404).json({ error: "Match request not found" });
       return;
     }
+    if (result.code === "TIMED_OUT") {
+      res.status(409).json({
+        error:
+          "This match request has timed out and cannot be cancelled. Start a new search from the dashboard.",
+      });
+      return;
+    }
     res.status(409).json({
       error: "Only pending match requests can be cancelled",
     });
