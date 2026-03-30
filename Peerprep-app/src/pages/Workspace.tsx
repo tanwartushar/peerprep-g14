@@ -7,6 +7,9 @@ import './Workspace.css';
 interface LocationState {
     difficulty?: string;
     topic?: string;
+    programmingLanguage?: string;
+    peerUserId?: string;
+    peerMatchRequestId?: string;
 }
 
 export const Workspace: React.FC = () => {
@@ -18,7 +21,7 @@ export const Workspace: React.FC = () => {
 
     const handleEndSession = () => {
         if (window.confirm('Are you sure you want to end this session?')) {
-            navigate('/dashboard');
+            navigate('/user/dashboard');
         }
     };
 
@@ -34,13 +37,18 @@ export const Workspace: React.FC = () => {
                     <div className="session-info">
                         <span className="tag-sm">{state?.difficulty || 'Medium'}</span>
                         <span className="tag-sm">{state?.topic || 'Arrays'}</span>
+                        {state?.programmingLanguage ? (
+                            <span className="tag-sm">{state.programmingLanguage}</span>
+                        ) : null}
                     </div>
                 </div>
 
                 <div className="header-right">
                     <div className="peer-status">
                         <div className="status-indicator online"></div>
-                        <span className="text-sm text-secondary">Peer Connected</span>
+                        <span className="text-sm text-secondary">
+                            {state?.peerUserId ? `Peer: ${state.peerUserId}` : 'Peer Connected'}
+                        </span>
                     </div>
                     <Button variant="danger" size="sm" onClick={handleEndSession}>
                         <LogOut className="h-4 w-4 mr-2" />

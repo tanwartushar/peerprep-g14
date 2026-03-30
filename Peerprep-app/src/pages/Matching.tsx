@@ -5,7 +5,8 @@ import { Button } from "../components/Button";
 import "./Matching.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
-import { cancelMatchRequest } from "../api/matching";
+import { cancelMatchRequest, getMatchRequest } from "../api/matching";
+import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 
 interface LocationState {
   difficulty?: string;
@@ -13,6 +14,9 @@ interface LocationState {
   programmingLanguage?: string;
   requestId?: string;
 }
+
+/** Backend polls every 2s (matching service on port 3003, proxied as `/matching` in dev). */
+const POLL_MS = 2000;
 
 export const Matching: React.FC = () => {
   const navigate = useNavigate();
@@ -23,41 +27,92 @@ export const Matching: React.FC = () => {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [pollError, setPollError] = useState<string | null>(null);
+
+  const effectiveUserId = getEffectiveMatchingUserId(userId);
 
   useEffect(() => {
     if (!state?.difficulty || !state?.topic || !state?.requestId) {
-      navigate("/dashboard");
+      navigate("/user/dashboard");
       return;
     }
 
     const timer = setInterval(() => {
-      setSecondsElapsed((prev) => prev + 1);
+      setSecondsElapsed((prev: number) => prev + 1);
     }, 1000);
-
-    // Simulate finding a match after 5 seconds
-    // const matchTimer = setTimeout(() => {
-    //   navigate("/workspace", { state });
-    // }, 5000);
 
     return () => {
       clearInterval(timer);
     };
   }, [navigate, state]);
 
+  useEffect(() => {
+    if (
+      !state?.requestId ||
+      !effectiveUserId ||
+      !state.difficulty ||
+      !state.topic
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const poll = async () => {
+      const result = await getMatchRequest(effectiveUserId, state.requestId!);
+      if (cancelled) return;
+      if (!result.ok) {
+        setPollError(result.message);
+        return;
+      }
+      setPollError(null);
+      const data = result.data;
+      if (data.status === "MATCHED") {
+        navigate("/workspace", {
+          replace: true,
+          state: {
+            difficulty: data.difficulty,
+            topic: data.topic,
+            programmingLanguage: data.programmingLanguage,
+            peerUserId: data.peer?.userId,
+            peerMatchRequestId: data.peer?.matchRequestId,
+          },
+        });
+      }
+      if (data.status === "CANCELLED") {
+        navigate("/user/dashboard", { replace: true });
+      }
+    };
+
+    void poll();
+    const id = window.setInterval(() => void poll(), POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [
+    effectiveUserId,
+    navigate,
+    state?.difficulty,
+    state?.programmingLanguage,
+    state?.requestId,
+    state?.topic,
+  ]);
+
   const handleCancel = async () => {
     setCancelError(null);
-    if (!state?.requestId || !userId) {
-      navigate("/dashboard");
+    if (!state?.requestId || !effectiveUserId) {
+      navigate("/user/dashboard");
       return;
     }
     setIsCancelling(true);
     try {
-      const result = await cancelMatchRequest(userId, state.requestId);
+      const result = await cancelMatchRequest(effectiveUserId, state.requestId);
       if (!result.ok) {
         setCancelError(result.message);
         return;
       }
-      navigate("/dashboard");
+      navigate("/user/dashboard");
     } finally {
       setIsCancelling(false);
     }
@@ -109,8 +164,17 @@ export const Matching: React.FC = () => {
 
               <div className="matching-timer">
                 <span className="timer-text">{formatTime(secondsElapsed)}</span>
-                <p className="timer-subtext">Estimated wait time: 00:30</p>
+                <p className="timer-subtext">
+                  Checking status every {POLL_MS / 1000}s
+                </p>
               </div>
+
+              {pollError ? (
+                <p className="matching-poll-hint" role="status">
+                  {pollError}
+                  <span className="matching-poll-retry"> Will retry shortly.</span>
+                </p>
+              ) : null}
 
               <div className="matching-actions">
                 {cancelError ? (

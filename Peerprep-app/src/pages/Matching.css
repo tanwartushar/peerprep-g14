@@ -200,6 +200,18 @@
   max-width: 22rem;
 }
 
+.matching-poll-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary, #64748b);
+  text-align: center;
+  max-width: 22rem;
+}
+
+.matching-poll-retry {
+  opacity: 0.85;
+}
+
 @media (max-width: 640px) {
   .matching-layout {
     padding: 1rem;

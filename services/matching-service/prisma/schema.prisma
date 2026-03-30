@@ -13,7 +13,7 @@ enum MatchRequestStatus {
   CANCELLED
 }
 
-/// Active pool = status PENDING; pool key is (topic, programmingLanguage).
+/// Active pool = status PENDING; matching pool key is (topic, programmingLanguage, difficulty).
 model MatchRequest {
   id                  String              @id @default(uuid())
   userId              String
@@ -21,9 +21,12 @@ model MatchRequest {
   difficulty          String
   programmingLanguage String
   status              MatchRequestStatus  @default(PENDING)
+  peerUserId          String?
+  peerMatchRequestId  String?
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
   @@unique([userId], map: "MatchRequest_one_pending_per_user", where: { status: "PENDING" })
   @@index([topic, programmingLanguage])
+  @@index([status, topic, programmingLanguage, difficulty])
 }

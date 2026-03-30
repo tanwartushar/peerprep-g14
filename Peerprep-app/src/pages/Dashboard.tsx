@@ -7,6 +7,7 @@ import "./Dashboard.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
 import { createMatchRequest } from "../api/matching";
+import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -21,13 +22,14 @@ export const Dashboard: React.FC = () => {
   const handleStartMatching = async () => {
     setSubmitError(null);
     if (!difficulty || !topic || !programmingLanguage) return;
-    if (!userId) {
+    const effectiveId = getEffectiveMatchingUserId(userId);
+    if (!effectiveId) {
       setSubmitError("Sign in to find a match.");
       return;
     }
     setIsSubmitting(true);
     try {
-      const result = await createMatchRequest(userId, {
+      const result = await createMatchRequest(effectiveId, {
         topic,
         difficulty,
         programmingLanguage,

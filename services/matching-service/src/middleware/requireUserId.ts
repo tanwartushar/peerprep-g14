@@ -1,16 +1,15 @@
 import type { RequestHandler } from "express";
-
-const HEADER = "x-user-id";
+import { resolveEffectiveUserIdFromRequest } from "../auth/resolveEffectiveUserId.js";
 
 /**
- * Development/testing: trusted caller supplies the authenticated user id.
+ * Requires a non-empty `x-user-id` (dev fake user or gateway-injected identity).
  */
 export const requireUserId: RequestHandler = (req, res, next) => {
-  const raw = req.header(HEADER);
-  if (raw === undefined || raw.trim() === "") {
+  const id = resolveEffectiveUserIdFromRequest(req);
+  if (!id) {
     res.status(401).json({ error: "Missing or empty x-user-id header" });
     return;
   }
-  req.userId = raw.trim();
+  req.userId = id;
   next();
 };
