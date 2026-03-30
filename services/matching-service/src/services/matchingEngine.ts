@@ -1,7 +1,8 @@
 /**
  * F4 / F6 / F5 queue matching: hard constraints (topic, programmingLanguage),
  * longest-waiting requester first within each (topic, language) group,
- * same difficulty before optional downward (F5), deterministic tie-breaks.
+ * same difficulty before optional downward (F5), optional time preference (F2) as ranking only,
+ * deterministic tie-breaks.
  *
  * Difficulty order: hard > medium > easy (F5.1).
  */
@@ -13,6 +14,8 @@ export type MatchRequestRow = {
   difficulty: string;
   programmingLanguage: string;
   allowLowerDifficultyMatch: boolean;
+  /** F2 — null if not specified; never a hard filter */
+  timeAvailableMinutes: number | null;
   createdAt: Date;
 };
 
@@ -40,6 +43,33 @@ export function compareMatchRequests(
   return a.id.localeCompare(b.id);
 }
 
+/**
+ * F2.5: among eligible partners, prefer exact time match when both specified the same value.
+ * Returns 1 if preferred, 0 otherwise — used for descending sort.
+ */
+function timePreferenceRank(
+  requester: MatchRequestRow,
+  candidate: MatchRequestRow,
+): number {
+  const rt = requester.timeAvailableMinutes;
+  const ct = candidate.timeAvailableMinutes;
+  if (rt != null && ct != null && rt === ct) return 1;
+  return 0;
+}
+
+/** Sort eligible partners: time preference first (F2), then deterministic tie-break. */
+function sortPartnersForRequester(
+  requester: MatchRequestRow,
+  partners: MatchRequestRow[],
+): MatchRequestRow[] {
+  return [...partners].sort((a, b) => {
+    const pa = timePreferenceRank(requester, a);
+    const pb = timePreferenceRank(requester, b);
+    if (pa !== pb) return pb - pa;
+    return compareMatchRequests(a, b);
+  });
+}
+
 /** F5.1: Hard > Medium > Easy */
 const DIFFICULTY_RANK: Record<string, number> = {
   easy: 1,
@@ -63,6 +93,7 @@ export function isStrictlyLowerDifficulty(
  * Finds the first pair to match: within each (topic, programmingLanguage) group,
  * try each requester in longest-waiting order; same-difficulty partners first (F5.3),
  * then downward only if requester.allowLowerDifficultyMatch (F5.4.1), never upward (F5.5).
+ * F2 time preference ranks eligible partners only; never excludes candidates.
  */
 export function findFirstPair(
   pending: MatchRequestRow[],
@@ -89,10 +120,11 @@ export function findFirstPair(
     for (const requester of group) {
       const others = group.filter((p) => p.userId !== requester.userId);
 
-      const sameDifficulty = others
-        .filter((p) => p.difficulty === requester.difficulty)
-        .sort(compareMatchRequests);
-      const bestSame = sameDifficulty[0];
+      const sameDifficulty = others.filter(
+        (p) => p.difficulty === requester.difficulty,
+      );
+      const sortedSame = sortPartnersForRequester(requester, sameDifficulty);
+      const bestSame = sortedSame[0];
       if (bestSame !== undefined) {
         return {
           requester,
@@ -105,12 +137,11 @@ export function findFirstPair(
         continue;
       }
 
-      const downward = others
-        .filter((p) =>
-          isStrictlyLowerDifficulty(p.difficulty, requester.difficulty),
-        )
-        .sort(compareMatchRequests);
-      const bestDown = downward[0];
+      const downward = others.filter((p) =>
+        isStrictlyLowerDifficulty(p.difficulty, requester.difficulty),
+      );
+      const sortedDown = sortPartnersForRequester(requester, downward);
+      const bestDown = sortedDown[0];
       if (bestDown !== undefined) {
         return {
           requester,

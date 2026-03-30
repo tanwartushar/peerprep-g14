@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge, Code2 } from "lucide-react";
+import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
@@ -17,6 +17,8 @@ export const Dashboard: React.FC = () => {
   const [programmingLanguage, setProgrammingLanguage] = useState("");
   const [allowLowerDifficultyMatch, setAllowLowerDifficultyMatch] =
     useState(false);
+  /** "" = no preference (F2 — omit from payload) */
+  const [timeAvailable, setTimeAvailable] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
@@ -36,6 +38,9 @@ export const Dashboard: React.FC = () => {
         difficulty,
         programmingLanguage,
         allowLowerDifficultyMatch,
+        ...(timeAvailable !== ""
+          ? { timeAvailableMinutes: Number(timeAvailable) }
+          : {}),
       });
       if (result.ok) {
         navigate("/matching", {
@@ -44,6 +49,8 @@ export const Dashboard: React.FC = () => {
             topic,
             programmingLanguage,
             allowLowerDifficultyMatch,
+            timeAvailableMinutes:
+              timeAvailable !== "" ? Number(timeAvailable) : undefined,
             requestId: result.data.id,
           },
         });
@@ -92,6 +99,13 @@ export const Dashboard: React.FC = () => {
     { value: "go", label: "Go" },
   ];
 
+  const timeAvailableOptions = [
+    { value: "", label: "No preference" },
+    { value: "30", label: "30 minutes" },
+    { value: "45", label: "45 minutes" },
+    { value: "60", label: "60 minutes" },
+  ];
+
   return (
     <div className="animate-fade-in">
       <div className="dashboard-layout">
@@ -132,6 +146,16 @@ export const Dashboard: React.FC = () => {
                 onChange={setProgrammingLanguage}
                 className="mt-8"
                 leftIcon={<Code2 className="h-5 w-5" />}
+              />
+
+              <Select
+                label="Time available (optional)"
+                placeholder="No preference"
+                options={timeAvailableOptions}
+                value={timeAvailable}
+                onChange={setTimeAvailable}
+                className="mt-8"
+                leftIcon={<Clock className="h-5 w-5" />}
               />
 
               <label className="dashboard-allow-lower mt-8">

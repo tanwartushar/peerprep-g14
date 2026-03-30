@@ -12,11 +12,19 @@ interface LocationState {
     peerMatchRequestId?: string;
     peerRequestedDifficulty?: string | null;
     matchingType?: 'same_difficulty' | 'downward' | null;
+    timeAvailableMinutes?: number | null;
+    peerTimeAvailableMinutes?: number | null;
+    matchedTimeAvailableMinutes?: number | null;
 }
 
 function formatDifficultyLabel(d: string | undefined): string {
     if (!d) return '—';
     return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
+function formatMinutesLine(m: number | null | undefined): string {
+    if (m == null) return 'Not specified';
+    return `${m} min`;
 }
 
 export const Workspace: React.FC = () => {
@@ -42,6 +50,8 @@ export const Workspace: React.FC = () => {
             : state?.matchingType === 'same_difficulty'
               ? 'Same difficulty match'
               : null;
+
+    const showMatchBanner = Boolean(state?.peerUserId);
 
     return (
         <div className="workspace-layout">
@@ -75,15 +85,38 @@ export const Workspace: React.FC = () => {
                 </div>
             </header>
 
-            {matchKindLabel ? (
+            {showMatchBanner ? (
                 <div className="workspace-match-banner" role="status">
-                    <p className="workspace-match-banner__title">Match</p>
-                    <p className="workspace-match-banner__line">
-                        <strong>Your requested difficulty:</strong> {yourDifficulty}
-                        {' · '}
-                        <strong>Partner requested difficulty:</strong> {partnerDifficulty}
+                    {matchKindLabel ? (
+                        <>
+                            <p className="workspace-match-banner__title">Match</p>
+                            <p className="workspace-match-banner__line">
+                                <strong>Your requested difficulty:</strong> {yourDifficulty}
+                                {' · '}
+                                <strong>Partner requested difficulty:</strong> {partnerDifficulty}
+                            </p>
+                            <p className="workspace-match-banner__kind">{matchKindLabel}</p>
+                        </>
+                    ) : null}
+
+                    <p className="workspace-match-banner__title workspace-match-banner__title--sub">
+                        Session time (optional preference)
                     </p>
-                    <p className="workspace-match-banner__kind">{matchKindLabel}</p>
+                    <p className="workspace-match-banner__line">
+                        <strong>Yours:</strong> {formatMinutesLine(state?.timeAvailableMinutes)}
+                        {' · '}
+                        <strong>Partner:</strong>{' '}
+                        {formatMinutesLine(state?.peerTimeAvailableMinutes)}
+                    </p>
+                    <p className="workspace-match-banner__line">
+                        <strong>Aligned time (both chose the same):</strong>{' '}
+                        {state?.matchedTimeAvailableMinutes != null
+                            ? `${state.matchedTimeAvailableMinutes} min`
+                            : '—'}
+                    </p>
+                    <p className="workspace-match-banner__hint">
+                        Time is a soft preference — different or missing times do not block matching.
+                    </p>
                 </div>
             ) : null}
 

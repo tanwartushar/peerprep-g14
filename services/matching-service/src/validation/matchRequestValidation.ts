@@ -2,9 +2,11 @@ import {
   MATCH_DIFFICULTIES,
   MATCH_TOPICS,
   PROGRAMMING_LANGUAGES,
+  TIME_AVAILABLE_MINUTES_ALLOWED,
   type MatchDifficulty,
   type MatchTopic,
   type ProgrammingLanguage,
+  type TimeAvailableMinutes,
 } from "../constants/matchingOptions.js";
 
 export type CreateMatchRequestInput = {
@@ -13,6 +15,8 @@ export type CreateMatchRequestInput = {
   programmingLanguage: ProgrammingLanguage;
   /** F5.2 — default false when omitted */
   allowLowerDifficultyMatch: boolean;
+  /** F2 — omit or null for no preference */
+  timeAvailableMinutes?: TimeAvailableMinutes;
 };
 
 export class MatchRequestValidationError extends Error {
@@ -76,6 +80,35 @@ function readOptionalBoolean(
 }
 
 /**
+ * F2 — optional; must be 30, 45, or 60 when provided.
+ */
+function readOptionalTimeAvailableMinutes(
+  body: Record<string, unknown>,
+  wrongType: string[],
+  invalid: string[],
+): TimeAvailableMinutes | undefined {
+  const raw = body["timeAvailableMinutes"];
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (typeof raw !== "number" || !Number.isInteger(raw)) {
+    wrongType.push(
+      "Field timeAvailableMinutes must be an integer when provided",
+    );
+    return undefined;
+  }
+  if (
+    !(TIME_AVAILABLE_MINUTES_ALLOWED as readonly number[]).includes(raw)
+  ) {
+    invalid.push(
+      `timeAvailableMinutes must be one of: ${TIME_AVAILABLE_MINUTES_ALLOWED.join(", ")} when provided`,
+    );
+    return undefined;
+  }
+  return raw as TimeAvailableMinutes;
+}
+
+/**
  * Validates POST /matching/requests JSON body (F1.1.x).
  */
 export function parseCreateMatchRequestBody(
@@ -89,6 +122,7 @@ export function parseCreateMatchRequestBody(
 
   const missing: string[] = [];
   const wrongType: string[] = [];
+  const invalid: string[] = [];
   const topicRaw = readStringField(body, "topic", missing, wrongType);
   const difficultyRaw = readStringField(body, "difficulty", missing, wrongType);
   const languageRaw = readStringField(
@@ -102,6 +136,7 @@ export function parseCreateMatchRequestBody(
     "allowLowerDifficultyMatch",
     wrongType,
   );
+  const timeRaw = readOptionalTimeAvailableMinutes(body, wrongType, invalid);
 
   if (wrongType.length > 0) {
     throw new MatchRequestValidationError(wrongType);
@@ -109,8 +144,6 @@ export function parseCreateMatchRequestBody(
   if (missing.length > 0) {
     throw new MatchRequestValidationError(missing);
   }
-
-  const invalid: string[] = [];
 
   if (!topicRaw || !isMember(topicRaw, MATCH_TOPICS)) {
     invalid.push(
@@ -143,10 +176,14 @@ export function parseCreateMatchRequestBody(
     throw new MatchRequestValidationError(["Invalid match request payload"]);
   }
 
-  return {
+  const out: CreateMatchRequestInput = {
     topic: topicRaw,
     difficulty: difficultyRaw,
     programmingLanguage: languageRaw,
     allowLowerDifficultyMatch: allowLowerRaw ?? false,
   };
+  if (timeRaw !== undefined) {
+    out.timeAvailableMinutes = timeRaw;
+  }
+  return out;
 }

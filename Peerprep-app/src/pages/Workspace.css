@@ -28,7 +28,7 @@
     );
     border-bottom: 1px solid var(--border-light);
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: #fff;
 }
 
 .workspace-match-banner__title {
@@ -36,18 +36,34 @@
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--text-muted);
+    color: #fff;
 }
 
 .workspace-match-banner__line {
     margin: 0;
     line-height: 1.45;
+    color: #fff;
+}
+
+.workspace-match-banner__line strong {
+    color: #fff;
 }
 
 .workspace-match-banner__kind {
     margin: 0.35rem 0 0;
     font-size: 0.8125rem;
-    color: var(--text-primary);
+    color: #fff;
+}
+
+.workspace-match-banner__title--sub {
+    margin-top: 0.75rem;
+}
+
+.workspace-match-banner__hint {
+    margin: 0.4rem 0 0;
+    font-size: 0.75rem;
+    color: #fff;
+    line-height: 1.4;
 }
 
 .header-left,

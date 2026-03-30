@@ -13,6 +13,8 @@ interface LocationState {
   topic?: string;
   programmingLanguage?: string;
   allowLowerDifficultyMatch?: boolean;
+  /** Set when user picked a time on the dashboard */
+  timeAvailableMinutes?: number;
   requestId?: string;
 }
 
@@ -79,6 +81,9 @@ export const Matching: React.FC = () => {
             peerMatchRequestId: data.peer?.matchRequestId,
             peerRequestedDifficulty: data.peerRequestedDifficulty,
             matchingType: data.matchingType,
+            timeAvailableMinutes: data.timeAvailableMinutes,
+            peerTimeAvailableMinutes: data.peerTimeAvailableMinutes,
+            matchedTimeAvailableMinutes: data.matchedTimeAvailableMinutes,
           },
         });
       }
@@ -168,6 +173,15 @@ export const Matching: React.FC = () => {
                   <span className="detail-label">Allow lower difficulty</span>
                   <span className="detail-value">
                     {state?.allowLowerDifficultyMatch ? "On" : "Off"}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">Time available</span>
+                  <span className="detail-value">
+                    {state?.timeAvailableMinutes != null
+                      ? `${state.timeAvailableMinutes} min`
+                      : "Not specified"}
                   </span>
                 </div>
               </div>

@@ -15,12 +15,18 @@ export type MatchRequestDTO = {
   difficulty: string;
   programmingLanguage: string;
   allowLowerDifficultyMatch: boolean;
+  /** F2 — your preference; null if not set */
+  timeAvailableMinutes: number | null;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: MatchPeerDTO | null;
   /** Partner’s requested difficulty when MATCHED; null otherwise */
   peerRequestedDifficulty: string | null;
+  /** Partner’s time preference when MATCHED; null if not set or not yet matched */
+  peerTimeAvailableMinutes: number | null;
+  /** F2 — both specified and equal; else null */
+  matchedTimeAvailableMinutes: number | null;
   /** Present when MATCHED with a peer */
   matchingType: "same_difficulty" | "downward" | null;
   createdAt: string;
@@ -34,6 +40,14 @@ function matchingPairTypeToApi(
   return t === "SAME_DIFFICULTY" ? "same_difficulty" : "downward";
 }
 
+function computedMatchedTimeMinutes(
+  self: number | null,
+  peer: number | null,
+): number | null {
+  if (self != null && peer != null && self === peer) return self;
+  return null;
+}
+
 function toDTO(row: {
   id: string;
   userId: string;
@@ -41,10 +55,12 @@ function toDTO(row: {
   difficulty: string;
   programmingLanguage: string;
   allowLowerDifficultyMatch: boolean;
+  timeAvailableMinutes: number | null;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peerRequestedDifficulty: string | null;
+  peerTimeAvailableMinutes: number | null;
   matchingPairType: "SAME_DIFFICULTY" | "DOWNWARD" | null;
   createdAt: Date;
   updatedAt: Date;
@@ -59,6 +75,11 @@ function toDTO(row: {
         }
       : null;
 
+  const matchedTimeAvailableMinutes = computedMatchedTimeMinutes(
+    row.timeAvailableMinutes,
+    row.peerTimeAvailableMinutes,
+  );
+
   return {
     id: row.id,
     userId: row.userId,
@@ -66,11 +87,14 @@ function toDTO(row: {
     difficulty: row.difficulty,
     programmingLanguage: row.programmingLanguage,
     allowLowerDifficultyMatch: row.allowLowerDifficultyMatch,
+    timeAvailableMinutes: row.timeAvailableMinutes,
     status: row.status,
     peerUserId: row.peerUserId,
     peerMatchRequestId: row.peerMatchRequestId,
     peer,
     peerRequestedDifficulty: row.peerRequestedDifficulty,
+    peerTimeAvailableMinutes: row.peerTimeAvailableMinutes,
+    matchedTimeAvailableMinutes,
     matchingType: matchingPairTypeToApi(row.matchingPairType),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -78,7 +102,7 @@ function toDTO(row: {
 }
 
 /**
- * Attempts to form one pair from the current PENDING queue (F4 / F5 / F6).
+ * Attempts to form one pair from the current PENDING queue (F4 / F5 / F6 / F2).
  * Runs in a transaction; safe to call after each new pending request.
  */
 export async function tryMatchQueue(): Promise<void> {
@@ -95,6 +119,7 @@ export async function tryMatchQueue(): Promise<void> {
         difficulty: r.difficulty,
         programmingLanguage: r.programmingLanguage,
         allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
+        timeAvailableMinutes: r.timeAvailableMinutes,
         createdAt: r.createdAt,
       })),
     );
@@ -118,6 +143,7 @@ export async function tryMatchQueue(): Promise<void> {
         peerUserId: b.userId,
         peerMatchRequestId: b.id,
         peerRequestedDifficulty: b.difficulty,
+        peerTimeAvailableMinutes: b.timeAvailableMinutes,
         matchingPairType: prismaPairType,
       },
     });
@@ -137,6 +163,7 @@ export async function tryMatchQueue(): Promise<void> {
         peerUserId: a.userId,
         peerMatchRequestId: a.id,
         peerRequestedDifficulty: a.difficulty,
+        peerTimeAvailableMinutes: a.timeAvailableMinutes,
         matchingPairType: prismaPairType,
       },
     });
@@ -159,6 +186,9 @@ export async function createMatchRequest(
         difficulty: input.difficulty,
         programmingLanguage: input.programmingLanguage,
         allowLowerDifficultyMatch: input.allowLowerDifficultyMatch,
+        ...(input.timeAvailableMinutes != null
+          ? { timeAvailableMinutes: input.timeAvailableMinutes }
+          : {}),
         status: "PENDING",
       },
     });

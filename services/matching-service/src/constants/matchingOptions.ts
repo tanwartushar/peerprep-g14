@@ -29,3 +29,8 @@ export const PROGRAMMING_LANGUAGES = [
 ] as const;
 
 export type ProgrammingLanguage = (typeof PROGRAMMING_LANGUAGES)[number];
+
+/** F2 — optional session length preference (minutes) */
+export const TIME_AVAILABLE_MINUTES_ALLOWED = [30, 45, 60] as const;
+
+export type TimeAvailableMinutes = (typeof TIME_AVAILABLE_MINUTES_ALLOWED)[number];

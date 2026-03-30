@@ -42,12 +42,18 @@ export type MatchRequestResponse = {
   difficulty: string;
   programmingLanguage: string;
   allowLowerDifficultyMatch: boolean;
+  /** F2 — optional minutes preference */
+  timeAvailableMinutes: number | null;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: { userId: string; matchRequestId: string } | null;
   /** Partner’s requested difficulty when MATCHED */
   peerRequestedDifficulty: string | null;
+  /** Partner’s time preference when MATCHED */
+  peerTimeAvailableMinutes: number | null;
+  /** Both specified and equal; else null */
+  matchedTimeAvailableMinutes: number | null;
   /** Same-difficulty vs cross-level (downward) match when MATCHED */
   matchingType: "same_difficulty" | "downward" | null;
   createdAt: string;
@@ -61,6 +67,8 @@ export async function createMatchRequest(
     difficulty: string;
     programmingLanguage: string;
     allowLowerDifficultyMatch?: boolean;
+    /** Omit when user leaves “no preference” */
+    timeAvailableMinutes?: number;
   },
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }

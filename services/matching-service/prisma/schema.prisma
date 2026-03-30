@@ -27,11 +27,15 @@ model MatchRequest {
   difficulty                String
   programmingLanguage       String
   allowLowerDifficultyMatch Boolean             @default(false)
+  /// F2 — optional preference only (30 / 45 / 60); null if not specified.
+  timeAvailableMinutes      Int?
   status                    MatchRequestStatus  @default(PENDING)
   peerUserId                String?
   peerMatchRequestId        String?
   /// Partner’s requested difficulty (easy | medium | hard) at match time; null until MATCHED.
   peerRequestedDifficulty   String?
+  /// Partner’s time preference at match time; null until MATCHED or if peer omitted time.
+  peerTimeAvailableMinutes    Int?
   matchingPairType          MatchingPairType?
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
