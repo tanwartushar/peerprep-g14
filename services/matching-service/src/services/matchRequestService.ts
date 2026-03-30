@@ -14,13 +14,25 @@ export type MatchRequestDTO = {
   topic: string;
   difficulty: string;
   programmingLanguage: string;
+  allowLowerDifficultyMatch: boolean;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: MatchPeerDTO | null;
+  /** Partner’s requested difficulty when MATCHED; null otherwise */
+  peerRequestedDifficulty: string | null;
+  /** Present when MATCHED with a peer */
+  matchingType: "same_difficulty" | "downward" | null;
   createdAt: string;
   updatedAt: string;
 };
+
+function matchingPairTypeToApi(
+  t: "SAME_DIFFICULTY" | "DOWNWARD" | null,
+): "same_difficulty" | "downward" | null {
+  if (t === null) return null;
+  return t === "SAME_DIFFICULTY" ? "same_difficulty" : "downward";
+}
 
 function toDTO(row: {
   id: string;
@@ -28,9 +40,12 @@ function toDTO(row: {
   topic: string;
   difficulty: string;
   programmingLanguage: string;
+  allowLowerDifficultyMatch: boolean;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
+  peerRequestedDifficulty: string | null;
+  matchingPairType: "SAME_DIFFICULTY" | "DOWNWARD" | null;
   createdAt: Date;
   updatedAt: Date;
 }): MatchRequestDTO {
@@ -50,17 +65,20 @@ function toDTO(row: {
     topic: row.topic,
     difficulty: row.difficulty,
     programmingLanguage: row.programmingLanguage,
+    allowLowerDifficultyMatch: row.allowLowerDifficultyMatch,
     status: row.status,
     peerUserId: row.peerUserId,
     peerMatchRequestId: row.peerMatchRequestId,
     peer,
+    peerRequestedDifficulty: row.peerRequestedDifficulty,
+    matchingType: matchingPairTypeToApi(row.matchingPairType),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 /**
- * Attempts to form one pair from the current PENDING queue (F4 / F6).
+ * Attempts to form one pair from the current PENDING queue (F4 / F5 / F6).
  * Runs in a transaction; safe to call after each new pending request.
  */
 export async function tryMatchQueue(): Promise<void> {
@@ -69,10 +87,25 @@ export async function tryMatchQueue(): Promise<void> {
       where: { status: "PENDING" },
     });
 
-    const pair = findFirstPair(pending);
+    const pair = findFirstPair(
+      pending.map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        topic: r.topic,
+        difficulty: r.difficulty,
+        programmingLanguage: r.programmingLanguage,
+        allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
+        createdAt: r.createdAt,
+      })),
+    );
     if (!pair) return;
 
-    const [a, b] = pair;
+    const { requester: a, partner: b, matchingType } = pair;
+
+    const prismaPairType =
+      matchingType === "same_difficulty"
+        ? ("SAME_DIFFICULTY" as const)
+        : ("DOWNWARD" as const);
 
     const first = await tx.matchRequest.updateMany({
       where: {
@@ -84,6 +117,8 @@ export async function tryMatchQueue(): Promise<void> {
         status: "MATCHED",
         peerUserId: b.userId,
         peerMatchRequestId: b.id,
+        peerRequestedDifficulty: b.difficulty,
+        matchingPairType: prismaPairType,
       },
     });
 
@@ -101,6 +136,8 @@ export async function tryMatchQueue(): Promise<void> {
         status: "MATCHED",
         peerUserId: a.userId,
         peerMatchRequestId: a.id,
+        peerRequestedDifficulty: a.difficulty,
+        matchingPairType: prismaPairType,
       },
     });
 
@@ -121,6 +158,7 @@ export async function createMatchRequest(
         topic: input.topic,
         difficulty: input.difficulty,
         programmingLanguage: input.programmingLanguage,
+        allowLowerDifficultyMatch: input.allowLowerDifficultyMatch,
         status: "PENDING",
       },
     });

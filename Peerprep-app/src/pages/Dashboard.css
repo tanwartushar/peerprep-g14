@@ -77,6 +77,25 @@
   margin-top: 1.5rem;
 }
 
+.dashboard-allow-lower {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  cursor: pointer;
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+}
+
+.dashboard-allow-lower input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+.dashboard-allow-lower-hint {
+  max-width: 42rem;
+  line-height: 1.45;
+}
+
 .dashboard-match-error {
   margin-top: 1rem;
   font-size: 0.875rem;

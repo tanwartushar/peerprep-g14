@@ -11,6 +11,8 @@ export type CreateMatchRequestInput = {
   topic: MatchTopic;
   difficulty: MatchDifficulty;
   programmingLanguage: ProgrammingLanguage;
+  /** F5.2 — default false when omitted */
+  allowLowerDifficultyMatch: boolean;
 };
 
 export class MatchRequestValidationError extends Error {
@@ -57,6 +59,22 @@ function isMember<T extends string>(
   return (allowed as readonly string[]).includes(value);
 }
 
+function readOptionalBoolean(
+  body: Record<string, unknown>,
+  key: string,
+  wrongType: string[],
+): boolean | undefined {
+  const raw = body[key];
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+  if (typeof raw !== "boolean") {
+    wrongType.push(`Field ${key} must be a boolean when provided`);
+    return undefined;
+  }
+  return raw;
+}
+
 /**
  * Validates POST /matching/requests JSON body (F1.1.x).
  */
@@ -77,6 +95,11 @@ export function parseCreateMatchRequestBody(
     body,
     "programmingLanguage",
     missing,
+    wrongType,
+  );
+  const allowLowerRaw = readOptionalBoolean(
+    body,
+    "allowLowerDifficultyMatch",
     wrongType,
   );
 
@@ -124,5 +147,6 @@ export function parseCreateMatchRequestBody(
     topic: topicRaw,
     difficulty: difficultyRaw,
     programmingLanguage: languageRaw,
+    allowLowerDifficultyMatch: allowLowerRaw ?? false,
   };
 }

@@ -15,6 +15,8 @@ export const Dashboard: React.FC = () => {
   const [difficulty, setDifficulty] = useState("");
   const [topic, setTopic] = useState("");
   const [programmingLanguage, setProgrammingLanguage] = useState("");
+  const [allowLowerDifficultyMatch, setAllowLowerDifficultyMatch] =
+    useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
@@ -33,6 +35,7 @@ export const Dashboard: React.FC = () => {
         topic,
         difficulty,
         programmingLanguage,
+        allowLowerDifficultyMatch,
       });
       if (result.ok) {
         navigate("/matching", {
@@ -40,6 +43,7 @@ export const Dashboard: React.FC = () => {
             difficulty,
             topic,
             programmingLanguage,
+            allowLowerDifficultyMatch,
             requestId: result.data.id,
           },
         });
@@ -129,6 +133,22 @@ export const Dashboard: React.FC = () => {
                 className="mt-8"
                 leftIcon={<Code2 className="h-5 w-5" />}
               />
+
+              <label className="dashboard-allow-lower mt-8">
+                <input
+                  type="checkbox"
+                  checked={allowLowerDifficultyMatch}
+                  onChange={(e) =>
+                    setAllowLowerDifficultyMatch(e.target.checked)
+                  }
+                />
+                <span>Allow lower difficulty match</span>
+              </label>
+              <p className="dashboard-allow-lower-hint text-secondary text-sm mt-2">
+                When on, you may be paired with someone who chose an easier
+                level (same topic and language). Same level is always tried
+                first.
+              </p>
             </div>
 
             {submitError ? (

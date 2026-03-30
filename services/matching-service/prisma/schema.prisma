@@ -13,18 +13,28 @@ enum MatchRequestStatus {
   CANCELLED
 }
 
-/// Active pool = status PENDING; matching pool key is (topic, programmingLanguage, difficulty).
+/// Set when status = MATCHED: same requested levels, or cross-level (downward from the harder requester’s perspective).
+enum MatchingPairType {
+  SAME_DIFFICULTY
+  DOWNWARD
+}
+
+/// Active pool = status PENDING; matching groups by (topic, programmingLanguage); difficulty handled in engine (F5).
 model MatchRequest {
-  id                  String              @id @default(uuid())
-  userId              String
-  topic               String
-  difficulty          String
-  programmingLanguage String
-  status              MatchRequestStatus  @default(PENDING)
-  peerUserId          String?
-  peerMatchRequestId  String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  id                        String              @id @default(uuid())
+  userId                    String
+  topic                     String
+  difficulty                String
+  programmingLanguage       String
+  allowLowerDifficultyMatch Boolean             @default(false)
+  status                    MatchRequestStatus  @default(PENDING)
+  peerUserId                String?
+  peerMatchRequestId        String?
+  /// Partner’s requested difficulty (easy | medium | hard) at match time; null until MATCHED.
+  peerRequestedDifficulty   String?
+  matchingPairType          MatchingPairType?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
 
   @@unique([userId], map: "MatchRequest_one_pending_per_user", where: { status: "PENDING" })
   @@index([topic, programmingLanguage])

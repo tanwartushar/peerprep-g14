@@ -12,6 +12,7 @@ interface LocationState {
   difficulty?: string;
   topic?: string;
   programmingLanguage?: string;
+  allowLowerDifficultyMatch?: boolean;
   requestId?: string;
 }
 
@@ -76,6 +77,8 @@ export const Matching: React.FC = () => {
             programmingLanguage: data.programmingLanguage,
             peerUserId: data.peer?.userId,
             peerMatchRequestId: data.peer?.matchRequestId,
+            peerRequestedDifficulty: data.peerRequestedDifficulty,
+            matchingType: data.matchingType,
           },
         });
       }
@@ -158,6 +161,13 @@ export const Matching: React.FC = () => {
                   <span className="detail-label">Language</span>
                   <span className="detail-value">
                     {state?.programmingLanguage || "—"}
+                  </span>
+                </div>
+
+                <div className="detail-item">
+                  <span className="detail-label">Allow lower difficulty</span>
+                  <span className="detail-value">
+                    {state?.allowLowerDifficultyMatch ? "On" : "Off"}
                   </span>
                 </div>
               </div>

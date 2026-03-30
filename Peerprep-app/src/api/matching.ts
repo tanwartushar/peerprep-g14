@@ -41,10 +41,15 @@ export type MatchRequestResponse = {
   topic: string;
   difficulty: string;
   programmingLanguage: string;
+  allowLowerDifficultyMatch: boolean;
   status: "PENDING" | "MATCHED" | "CANCELLED";
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: { userId: string; matchRequestId: string } | null;
+  /** Partner’s requested difficulty when MATCHED */
+  peerRequestedDifficulty: string | null;
+  /** Same-difficulty vs cross-level (downward) match when MATCHED */
+  matchingType: "same_difficulty" | "downward" | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -55,6 +60,7 @@ export async function createMatchRequest(
     topic: string;
     difficulty: string;
     programmingLanguage: string;
+    allowLowerDifficultyMatch?: boolean;
   },
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }

@@ -10,6 +10,13 @@ interface LocationState {
     programmingLanguage?: string;
     peerUserId?: string;
     peerMatchRequestId?: string;
+    peerRequestedDifficulty?: string | null;
+    matchingType?: 'same_difficulty' | 'downward' | null;
+}
+
+function formatDifficultyLabel(d: string | undefined): string {
+    if (!d) return '—';
+    return d.charAt(0).toUpperCase() + d.slice(1);
 }
 
 export const Workspace: React.FC = () => {
@@ -24,6 +31,17 @@ export const Workspace: React.FC = () => {
             navigate('/user/dashboard');
         }
     };
+
+    const yourDifficulty = formatDifficultyLabel(state?.difficulty);
+    const partnerDifficulty = formatDifficultyLabel(
+        state?.peerRequestedDifficulty ?? undefined,
+    );
+    const matchKindLabel =
+        state?.matchingType === 'downward'
+            ? 'Downward match'
+            : state?.matchingType === 'same_difficulty'
+              ? 'Same difficulty match'
+              : null;
 
     return (
         <div className="workspace-layout">
@@ -50,12 +68,24 @@ export const Workspace: React.FC = () => {
                             {state?.peerUserId ? `Peer: ${state.peerUserId}` : 'Peer Connected'}
                         </span>
                     </div>
-                    <Button variant="danger" size="sm" onClick={handleEndSession}>
+                    <Button variant="solid" theme="user" size="sm" onClick={handleEndSession}>
                         <LogOut className="h-4 w-4 mr-2" />
                         End Session
                     </Button>
                 </div>
             </header>
+
+            {matchKindLabel ? (
+                <div className="workspace-match-banner" role="status">
+                    <p className="workspace-match-banner__title">Match</p>
+                    <p className="workspace-match-banner__line">
+                        <strong>Your requested difficulty:</strong> {yourDifficulty}
+                        {' · '}
+                        <strong>Partner requested difficulty:</strong> {partnerDifficulty}
+                    </p>
+                    <p className="workspace-match-banner__kind">{matchKindLabel}</p>
+                </div>
+            ) : null}
 
             {/* Main Workspace Area */}
             <main className="workspace-main">
