@@ -60,6 +60,7 @@ type CreateQuestionParams struct {
 	ExpectedOutput string   `json:"expectedOutput"`
 	Difficulty  string   `json:"difficulty"`
 	Topics      []string `json:"topics"`
+	//image_url
 }
 
 func initQuestion() Question{

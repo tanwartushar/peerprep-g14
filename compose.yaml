@@ -92,10 +92,12 @@ services:
     platform: linux/amd64
     build:
       context: ./services/question-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev      #use Dockerfile.prod for production
     depends_on:
       - auth-service # if it depends on auth
     restart: on-failure
+    volumes:
+    - ./services/question-service:/app
     develop:
       watch:
         - action: sync
