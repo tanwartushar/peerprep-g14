@@ -3,14 +3,15 @@ package repository
 
 import (
 	"context"
-	"errors"
+	// "errors"
 	"fmt"
 
 	// "log"
-	"strings"
+	// "strings"
 	"time"
 
 	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	"github.com/tgonet/peerprep-g14/services/question-service/question/validation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
@@ -39,74 +40,26 @@ const (
 	doubly_linked_list
 )
 
-type TopicStore struct {
-    topics map[string]struct{}
-}
-
-func NewTopicStore() *TopicStore {
-    return &TopicStore{
-        topics: map[string]struct{}{
-            "binary_search":        {},
-			"depth_first_search":   {},
-			"breadth_first_search": {},
-			"singly_linked_list":   {},
-			"doubly_linked_list":   {},
-        },
-    }
-}
 
 type Question struct {
 	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
 	Title       string   `json:"title" bson:"Title"`
 	Description string   `json:"description" bson:"Description"`
+	Constraint string   `json:"constraint" bson:"Constraint"`
+	ExpectedOutput string   `json:"expectedOutput" bson:"ExpectedOutput"`
 	Difficulty  string   `json:"difficulty" bson:"Difficulty"`
 	Topics      []string `json:"topics" bson:"Topics"`
 	CreatedAt   string   `json:"createdAt" bson:"CreatedAt"`
 	// image_url
 }
 
-// Stringer inteface
-// func (d difficulty) String() string {
-// 	return [...]string{"Easy", "Medium", "Hard"}[d]
-// }
-
-func validateDifficulty(s string) (string, error) {
-	validDiff := false
-	s = strings.ToLower(s)
-
-    switch s {
-    case "easy":   validDiff = true
-    case "medium": validDiff = true
-    case "hard":   validDiff = true
-    default:       validDiff = false
-	}
-
-	if validDiff == true {
-		return s, nil
-	} else {
-		return "", errors.New("unknown difficulty level")
-	}
-}
-
-func validateTopics(input []string, ts *TopicStore) ([]string, error) {
-    var result []string
-	validTopic := false
-
-    for _, s := range input {
-        // Check if the string exists in our list
-		if _, ok := ts.topics[s]; ok {
-        fmt.Printf("%s exist\n", s)
-		result = append(result, s)
-		validTopic = true
-    	} else {
-			validTopic = false
-			break
-		}
-    }
-	if validTopic == false {
-		return nil, errors.New("unknown topic input")
-	}
-    return result, nil
+type CreateQuestionParams struct {
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Constraint string   `json:"constraint"`
+	ExpectedOutput string   `json:"expectedOutput"`
+	Difficulty  string   `json:"difficulty"`
+	Topics      []string `json:"topics"`
 }
 
 func initQuestion() Question{
@@ -114,30 +67,35 @@ func initQuestion() Question{
 	quest_struct.Title = ""
 	quest_struct.Description = ""
 	quest_struct.Difficulty = ""
+	quest_struct.Constraint = ""
+	quest_struct.ExpectedOutput = ""
 	quest_struct.Topics = []string{}
 	quest_struct.CreatedAt = ""
 	return quest_struct
 }
 
-func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
+// func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
+func (q *QuestionService) CreateQuestion(req CreateQuestionParams, client *mongo.Client) (any, error) {
 	doc := initQuestion()
-	topicstore := NewTopicStore()
+	topicstore := validation.NewTopicStore()
 	// validateTitle(title)
-	validatedLevel, err := validateDifficulty(diff)
+	validatedLevel, err := validation.ValidateDifficulty(req.Difficulty)
 	if err != nil {
 		fmt.Println("Validation Error:", err)
         return nil, err// Stop execution if the difficulty is invalid
     }
 
-	validatedTopics, err := validateTopics(topics, topicstore)
+	validatedTopics, err := validation.ValidateTopics(req.Topics, topicstore)
 	if err != nil {
 		fmt.Println("Validation Error:", err)
         return nil, err// Stop execution if the difficulty is invalid
     }
 
-	doc.Title = *title
-	doc.Description = *desc
+	doc.Title = req.Title
+	doc.Description = req.Description
 	doc.Difficulty = validatedLevel
+	doc.Constraint = req.Constraint
+	doc.ExpectedOutput = req.ExpectedOutput
 	doc.Topics = validatedTopics
 	doc.CreatedAt = time.Now().Format(time.DateTime)
 	
@@ -148,7 +106,6 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
 	fmt.Printf("Topics: %s\n", doc.Topics)
 	fmt.Printf("createdAt: %s\n", doc.CreatedAt)
 
-	// client := database.ConnectMongo()
 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 	result, err := questionColl.InsertOne(context.TODO(), doc)
 	if err != nil {
@@ -216,13 +173,13 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 		return fmt.Errorf("invalid ID format")
 	}
 
-	topicstore := NewTopicStore()
-	validatedLevel, err := validateDifficulty(diff)
+	topicstore := validation.NewTopicStore()
+	validatedLevel, err := validation.ValidateDifficulty(diff)
 	if err != nil {
 		return err
 	}
 
-	validatedTopics, err := validateTopics(topics, topicstore)
+	validatedTopics, err := validation.ValidateTopics(topics, topicstore)
 	if err != nil {
 		return err
 	}

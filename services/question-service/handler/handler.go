@@ -24,24 +24,22 @@ type Handler struct {
 
 
 func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
-	var questDoc struct {
-        Title   string `json:"title"`
-        Description string `json:"description"`
-        Difficulty string `json:"difficulty"`
-        Topics []string `json:"topics"`
-    }
+	// var questDoc struct {
+    //     Title   string `json:"title"`
+    //     Description string `json:"description"`
+    //     Difficulty string `json:"difficulty"`
+    //     Topics []string `json:"topics"`
+    // }
+	var params repository.CreateQuestionParams
 
 	// Bind JSON from the UI request
-    if err := c.ShouldBindJSON(&questDoc); err != nil {
+    if err := c.ShouldBindJSON(&params); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
         return
     }
 
 	questID, err := h.QuestSvc.CreateQuestion(
-		&questDoc.Title, 
-		&questDoc.Description, 
-		questDoc.Difficulty, 
-		questDoc.Topics, 
+		params,
 		h.DB)
 
 	if err != nil {
