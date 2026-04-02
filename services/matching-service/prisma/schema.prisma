@@ -12,6 +12,7 @@ enum MatchRequestStatus {
   MATCHED
   CANCELLED
   TIMED_OUT
+  RECONNECT_EXPIRED
 }
 
 /// Set when status = MATCHED: same requested levels, or cross-level (downward from the harder requester’s perspective).
@@ -38,6 +39,9 @@ model MatchRequest {
   /// Partner’s time preference at match time; null until MATCHED or if peer omitted time.
   peerTimeAvailableMinutes    Int?
   matchingPairType          MatchingPairType?
+  /// F9 — set when client reports temporary disconnect; cleared on reconnect.
+  disconnectedAt            DateTime?
+  reconnectDeadlineAt       DateTime?
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
 

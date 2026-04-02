@@ -5,15 +5,24 @@ import { Button } from "../components/Button";
 import "./Matching.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
-import { cancelMatchRequest, getMatchRequest } from "../api/matching";
+import {
+  cancelMatchRequest,
+  disconnectMatchRequestKeepalive,
+  getMatchRequest,
+  reconnectMatchRequest,
+} from "../api/matching";
 import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
+import {
+  clearActiveMatchRequestId,
+  getActiveMatchRequestId,
+  setActiveMatchRequestId,
+} from "../matching/matchingSession";
 
 interface LocationState {
   difficulty?: string;
   topic?: string;
   programmingLanguage?: string;
   allowLowerDifficultyMatch?: boolean;
-  /** Set when user picked a time on the dashboard */
   timeAvailableMinutes?: number;
   requestId?: string;
 }
@@ -24,54 +33,178 @@ const POLL_MS = 2000;
 export const Matching: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state as LocationState;
+  const locState = location.state as LocationState | null;
   const { userId } = useAuth();
+
+  const [requestId] = useState(
+    () => locState?.requestId ?? getActiveMatchRequestId() ?? "",
+  );
+
+  /** Merged from route + GET; drives the detail rows */
+  const [row, setRow] = useState<LocationState | null>(() =>
+    locState?.requestId ? locState : null,
+  );
+  const [ready, setReady] = useState(false);
+  const [resumeNote, setResumeNote] = useState<string | null>(null);
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
-  const [timedOut, setTimedOut] = useState(false);
-  const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
+  /** F8 timeout vs F9 reconnect expiry — same card layout, different copy */
+  const [terminal, setTerminal] = useState<"none" | "timeout" | "reconnect">(
+    "none",
+  );
+  const [terminalMessage, setTerminalMessage] = useState<string | null>(null);
 
   const effectiveUserId = getEffectiveMatchingUserId(userId);
 
   useEffect(() => {
-    if (!state?.difficulty || !state?.topic || !state?.requestId) {
-      navigate("/user/dashboard");
-      return;
+    if (!requestId) {
+      navigate("/user/dashboard", { replace: true });
     }
+  }, [requestId, navigate]);
 
-    if (timedOut) {
-      return;
-    }
+  /** Bootstrap + optional reconnect (F9) */
+  useEffect(() => {
+    if (!requestId || !effectiveUserId) return;
+
+    let cancelled = false;
+
+    const boot = async () => {
+      const recovering =
+        !locState?.requestId && Boolean(getActiveMatchRequestId());
+      if (recovering) {
+        setResumeNote("Resuming search…");
+      }
+
+      setActiveMatchRequestId(requestId);
+      const initial = await getMatchRequest(effectiveUserId, requestId);
+      if (cancelled) return;
+
+      if (!initial.ok) {
+        clearActiveMatchRequestId();
+        navigate("/user/dashboard", { replace: true });
+        return;
+      }
+
+      const d = initial.data;
+
+      if (d.status === "MATCHED") {
+        clearActiveMatchRequestId();
+        navigate("/workspace", {
+          replace: true,
+          state: {
+            difficulty: d.difficulty,
+            topic: d.topic,
+            programmingLanguage: d.programmingLanguage,
+            peerUserId: d.peer?.userId,
+            peerMatchRequestId: d.peer?.matchRequestId,
+            peerRequestedDifficulty: d.peerRequestedDifficulty,
+            matchingType: d.matchingType,
+            timeAvailableMinutes: d.timeAvailableMinutes,
+            peerTimeAvailableMinutes: d.peerTimeAvailableMinutes,
+            matchedTimeAvailableMinutes: d.matchedTimeAvailableMinutes,
+          },
+        });
+        return;
+      }
+
+      if (d.status === "CANCELLED") {
+        clearActiveMatchRequestId();
+        navigate("/user/dashboard", { replace: true });
+        return;
+      }
+
+      if (d.status === "TIMED_OUT") {
+        clearActiveMatchRequestId();
+        setTerminalMessage(
+          d.message ??
+            "No match was found in time. You can try again from the dashboard.",
+        );
+        setTerminal("timeout");
+        setResumeNote(null);
+        return;
+      }
+
+      if (d.status === "RECONNECT_EXPIRED") {
+        clearActiveMatchRequestId();
+        setTerminalMessage(
+          d.message ??
+            "Your previous match request expired while disconnected. Please start a new search.",
+        );
+        setTerminal("reconnect");
+        setResumeNote(null);
+        return;
+      }
+
+      if (d.status === "PENDING") {
+        setRow({
+          requestId,
+          topic: d.topic,
+          difficulty: d.difficulty,
+          programmingLanguage: d.programmingLanguage,
+          allowLowerDifficultyMatch: d.allowLowerDifficultyMatch,
+          timeAvailableMinutes: d.timeAvailableMinutes ?? undefined,
+        });
+
+        if (d.disconnectedAt) {
+          setResumeNote("Reconnecting…");
+          const rc = await reconnectMatchRequest(effectiveUserId, requestId);
+          if (cancelled) return;
+          if (!rc.ok) {
+            clearActiveMatchRequestId();
+            setTerminalMessage(
+              rc.message ||
+                "Reconnect grace expired. Please start a new search from the dashboard.",
+            );
+            setTerminal("reconnect");
+            setResumeNote(null);
+            return;
+          }
+        }
+
+        setResumeNote(null);
+        setReady(true);
+      }
+    };
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+  }, [requestId, effectiveUserId, navigate, locState?.requestId]);
+
+  useEffect(() => {
+    if (terminal !== "none" || !ready) return;
 
     const timer = setInterval(() => {
       setSecondsElapsed((prev: number) => prev + 1);
     }, 1000);
+    return () => clearInterval(timer);
+  }, [terminal, ready]);
 
-    return () => {
-      clearInterval(timer);
-    };
-  }, [navigate, state, timedOut]);
-
+  /** F9 — page unload while actively waiting */
   useEffect(() => {
-    if (
-      !state?.requestId ||
-      !effectiveUserId ||
-      !state.difficulty ||
-      !state.topic
-    ) {
+    if (terminal !== "none" || !ready || !requestId || !effectiveUserId) {
       return;
     }
-    if (timedOut) {
+    const onLeave = () => {
+      disconnectMatchRequestKeepalive(effectiveUserId, requestId);
+    };
+    window.addEventListener("pagehide", onLeave);
+    return () => window.removeEventListener("pagehide", onLeave);
+  }, [terminal, ready, requestId, effectiveUserId]);
+
+  useEffect(() => {
+    if (terminal !== "none" || !ready || !effectiveUserId || !requestId) {
       return;
     }
 
     let cancelled = false;
 
     const poll = async () => {
-      const result = await getMatchRequest(effectiveUserId, state.requestId!);
+      const result = await getMatchRequest(effectiveUserId, requestId);
       if (cancelled) return;
       if (!result.ok) {
         setPollError(result.message);
@@ -79,15 +212,27 @@ export const Matching: React.FC = () => {
       }
       setPollError(null);
       const data = result.data;
+
       if (data.status === "TIMED_OUT") {
-        setTimedOut(true);
-        setTimeoutMessage(
+        clearActiveMatchRequestId();
+        setTerminalMessage(
           data.message ??
             "No match was found in time. You can try again from the dashboard.",
         );
+        setTerminal("timeout");
+        return;
+      }
+      if (data.status === "RECONNECT_EXPIRED") {
+        clearActiveMatchRequestId();
+        setTerminalMessage(
+          data.message ??
+            "Your previous match request expired while disconnected. Please start a new search.",
+        );
+        setTerminal("reconnect");
         return;
       }
       if (data.status === "MATCHED") {
+        clearActiveMatchRequestId();
         navigate("/workspace", {
           replace: true,
           state: {
@@ -103,9 +248,12 @@ export const Matching: React.FC = () => {
             matchedTimeAvailableMinutes: data.matchedTimeAvailableMinutes,
           },
         });
+        return;
       }
       if (data.status === "CANCELLED") {
+        clearActiveMatchRequestId();
         navigate("/user/dashboard", { replace: true });
+        return;
       }
     };
 
@@ -115,29 +263,22 @@ export const Matching: React.FC = () => {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [
-    effectiveUserId,
-    navigate,
-    state?.difficulty,
-    state?.programmingLanguage,
-    state?.requestId,
-    state?.topic,
-    timedOut,
-  ]);
+  }, [effectiveUserId, navigate, terminal, ready, requestId]);
 
   const handleCancel = async () => {
     setCancelError(null);
-    if (!state?.requestId || !effectiveUserId) {
+    if (!requestId || !effectiveUserId) {
       navigate("/user/dashboard");
       return;
     }
     setIsCancelling(true);
     try {
-      const result = await cancelMatchRequest(effectiveUserId, state.requestId);
+      const result = await cancelMatchRequest(effectiveUserId, requestId);
       if (!result.ok) {
         setCancelError(result.message);
         return;
       }
+      clearActiveMatchRequestId();
       navigate("/user/dashboard");
     } finally {
       setIsCancelling(false);
@@ -150,26 +291,29 @@ export const Matching: React.FC = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const isTerminal = terminal !== "none";
+  const title = isTerminal ? "Search ended" : "Finding a Peer...";
+
   return (
     <div className="matching-layout animate-fade-in">
       <div className="matching-container">
         <Card theme="user" className="matching-card">
           <div className="matching-card__inner">
-            {timedOut ? (
+            {isTerminal ? (
               <>
                 <div className="matching-hero matching-hero--timeout">
                   <div className="matching-hero__core matching-hero__core--timeout">
                     <Clock className="matching-hero__icon" />
                   </div>
                 </div>
-                <div className="matching-hero__title">No match found in time</div>
+                <div className="matching-hero__title">{title}</div>
                 <div className="matching-info">
                   <p className="matching-timeout-message" role="status">
-                    {timeoutMessage}
+                    {terminalMessage}
                   </p>
                   <div className="matching-timer">
                     <span className="timer-text">{formatTime(secondsElapsed)}</span>
-                    <p className="timer-subtext">Wait time before timeout</p>
+                    <p className="timer-subtext">Wait time</p>
                   </div>
                   <div className="matching-actions">
                     <Button
@@ -193,41 +337,47 @@ export const Matching: React.FC = () => {
                     <Users className="matching-hero__icon" />
                   </div>
                 </div>
-                <div className="matching-hero__title">Finding a Peer...</div>
+                <div className="matching-hero__title">{title}</div>
 
                 <div className="matching-info">
+                  {resumeNote ? (
+                    <p className="matching-poll-hint" role="status">
+                      {resumeNote}
+                    </p>
+                  ) : null}
+
                   <div className="matching-details">
                     <div className="detail-item">
                       <span className="detail-label">Topic</span>
-                      <span className="detail-value">{state?.topic || "Any"}</span>
+                      <span className="detail-value">{row?.topic ?? "—"}</span>
                     </div>
 
                     <div className="detail-item">
                       <span className="detail-label">Difficulty</span>
                       <span className="detail-value">
-                        {state?.difficulty || "Any"}
+                        {row?.difficulty ?? "—"}
                       </span>
                     </div>
 
                     <div className="detail-item">
                       <span className="detail-label">Language</span>
                       <span className="detail-value">
-                        {state?.programmingLanguage || "—"}
+                        {row?.programmingLanguage ?? "—"}
                       </span>
                     </div>
 
                     <div className="detail-item">
                       <span className="detail-label">Allow lower difficulty</span>
                       <span className="detail-value">
-                        {state?.allowLowerDifficultyMatch ? "On" : "Off"}
+                        {row?.allowLowerDifficultyMatch ? "On" : "Off"}
                       </span>
                     </div>
 
                     <div className="detail-item">
                       <span className="detail-label">Time available</span>
                       <span className="detail-value">
-                        {state?.timeAvailableMinutes != null
-                          ? `${state.timeAvailableMinutes} min`
+                        {row?.timeAvailableMinutes != null
+                          ? `${row.timeAvailableMinutes} min`
                           : "Not specified"}
                       </span>
                     </div>
@@ -257,7 +407,7 @@ export const Matching: React.FC = () => {
                       theme="user"
                       variant="ghost"
                       onClick={() => void handleCancel()}
-                      disabled={isCancelling}
+                      disabled={isCancelling || !ready}
                       leftIcon={<X className="h-4 w-4" />}
                     >
                       {isCancelling ? "Cancelling…" : "Cancel Search"}

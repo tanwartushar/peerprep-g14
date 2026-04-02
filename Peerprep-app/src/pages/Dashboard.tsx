@@ -8,6 +8,7 @@ import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
 import { createMatchRequest } from "../api/matching";
 import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
+import { setActiveMatchRequestId } from "../matching/matchingSession";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -43,6 +44,7 @@ export const Dashboard: React.FC = () => {
           : {}),
       });
       if (result.ok) {
+        setActiveMatchRequestId(result.data.id);
         navigate("/matching", {
           state: {
             difficulty,

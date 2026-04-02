@@ -44,9 +44,17 @@ export type MatchRequestResponse = {
   allowLowerDifficultyMatch: boolean;
   /** F2 — optional minutes preference */
   timeAvailableMinutes: number | null;
-  status: "PENDING" | "MATCHED" | "CANCELLED" | "TIMED_OUT";
-  /** F8 — when status is TIMED_OUT */
+  status:
+    | "PENDING"
+    | "MATCHED"
+    | "CANCELLED"
+    | "TIMED_OUT"
+    | "RECONNECT_EXPIRED";
+  /** F8 / F9 — when status is TIMED_OUT or RECONNECT_EXPIRED */
   message: string | null;
+  /** F9 — temporary disconnect (grace) */
+  disconnectedAt: string | null;
+  reconnectDeadlineAt: string | null;
   peerUserId: string | null;
   peerMatchRequestId: string | null;
   peer: { userId: string; matchRequestId: string } | null;
@@ -110,6 +118,105 @@ export async function createMatchRequest(
     /* ignore */
   }
   return { ok: false, status: res.status, message };
+}
+
+export async function disconnectMatchRequest(
+  effectiveUserId: string | null,
+  requestId: string,
+): Promise<
+  { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
+> {
+  const base = getMatchingServiceBaseUrl();
+  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/disconnect`;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      url,
+      matchingFetchInit(effectiveUserId, {
+        method: "POST",
+        body: "{}",
+      }),
+    );
+  } catch (e) {
+    const hint = e instanceof Error ? e.message : "Network error";
+    return { ok: false, status: 0, message: hint };
+  }
+
+  if (res.ok) {
+    const data = (await res.json()) as MatchRequestResponse;
+    return { ok: true, data };
+  }
+
+  let message = res.statusText;
+  try {
+    const err = (await res.json()) as { error?: string };
+    if (err.error) message = err.error;
+  } catch {
+    /* ignore */
+  }
+  return { ok: false, status: res.status, message };
+}
+
+export async function reconnectMatchRequest(
+  effectiveUserId: string | null,
+  requestId: string,
+): Promise<
+  { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
+> {
+  const base = getMatchingServiceBaseUrl();
+  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/reconnect`;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      url,
+      matchingFetchInit(effectiveUserId, {
+        method: "POST",
+        body: "{}",
+      }),
+    );
+  } catch (e) {
+    const hint = e instanceof Error ? e.message : "Network error";
+    return { ok: false, status: 0, message: hint };
+  }
+
+  if (res.ok) {
+    const data = (await res.json()) as MatchRequestResponse;
+    return { ok: true, data };
+  }
+
+  let message = res.statusText;
+  try {
+    const err = (await res.json()) as { error?: string };
+    if (err.error) message = err.error;
+  } catch {
+    /* ignore */
+  }
+  return { ok: false, status: res.status, message };
+}
+
+/**
+ * Fire-and-forget disconnect for page unload (F9). Uses keepalive so the request may complete after navigation.
+ */
+export function disconnectMatchRequestKeepalive(
+  effectiveUserId: string | null,
+  requestId: string,
+): void {
+  const base = getMatchingServiceBaseUrl();
+  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/disconnect`;
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  if (import.meta.env.DEV && effectiveUserId) {
+    headers.set("x-user-id", effectiveUserId);
+  }
+  void fetch(url, {
+    method: "POST",
+    headers,
+    body: "{}",
+    keepalive: true,
+    credentials: import.meta.env.PROD ? "include" : "same-origin",
+  });
 }
 
 export async function getMatchRequest(
