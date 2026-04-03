@@ -322,7 +322,11 @@ export const Matching: React.FC = () => {
   };
 
   const isTerminal = terminal !== "none";
-  const title = isTerminal ? "Search ended" : "Finding a Peer...";
+  const title = !isTerminal
+    ? "Finding a Peer..."
+    : terminal === "timeout"
+      ? "Timeout"
+      : "Search ended";
 
   return (
     <div className="matching-layout animate-fade-in">
@@ -341,10 +345,6 @@ export const Matching: React.FC = () => {
                   <p className="matching-timeout-message" role="status">
                     {terminalMessage}
                   </p>
-                  <div className="matching-timer">
-                    <span className="timer-text">{formatTime(secondsElapsed)}</span>
-                    <p className="timer-subtext">Wait time</p>
-                  </div>
                   <div className="matching-actions">
                     <Button
                       theme="user"
