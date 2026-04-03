@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
 import { Select } from "../components/Select";
@@ -9,20 +9,47 @@ import { useAuth } from "../context/AuthContext";
 import { createMatchRequest } from "../api/matching";
 import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 import { setActiveMatchRequestId } from "../matching/matchingSession";
+import {
+  loadMatchFormDraft,
+  saveMatchFormDraft,
+} from "../matching/matchFormDraft";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { userId, isLoading } = useAuth();
-  const [difficulty, setDifficulty] = useState("");
-  const [topic, setTopic] = useState("");
-  const [programmingLanguage, setProgrammingLanguage] = useState("");
-  const [allowLowerDifficultyMatch, setAllowLowerDifficultyMatch] =
-    useState(false);
+  const [difficulty, setDifficulty] = useState(
+    () => loadMatchFormDraft()?.difficulty ?? "",
+  );
+  const [topic, setTopic] = useState(() => loadMatchFormDraft()?.topic ?? "");
+  const [programmingLanguage, setProgrammingLanguage] = useState(
+    () => loadMatchFormDraft()?.programmingLanguage ?? "",
+  );
+  const [allowLowerDifficultyMatch, setAllowLowerDifficultyMatch] = useState(
+    () => loadMatchFormDraft()?.allowLowerDifficultyMatch ?? false,
+  );
   /** "" = no preference (F2 — omit from payload) */
-  const [timeAvailable, setTimeAvailable] = useState("");
+  const [timeAvailable, setTimeAvailable] = useState(
+    () => loadMatchFormDraft()?.timeAvailable ?? "",
+  );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
+
+  useEffect(() => {
+    saveMatchFormDraft({
+      topic,
+      difficulty,
+      programmingLanguage,
+      allowLowerDifficultyMatch,
+      timeAvailable,
+    });
+  }, [
+    topic,
+    difficulty,
+    programmingLanguage,
+    allowLowerDifficultyMatch,
+    timeAvailable,
+  ]);
 
   const handleStartMatching = async () => {
     setSubmitError(null);
