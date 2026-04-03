@@ -32,7 +32,7 @@ export const Header: React.FC<AppShellHeaderProps> = ({
 }) => {
   const { data: user, isLoading: profileLoading } = useCurrentUserProfile();
 
-  const displayName = theme === "admin" ? "Admin" : (user?.name ?? "User Name");
+  const displayName = theme === "admin" ? (user?.name ?? "Admin") : (user?.name ?? "User Name");
 
   return (
     <div

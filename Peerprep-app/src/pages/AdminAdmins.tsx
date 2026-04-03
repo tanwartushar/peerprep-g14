@@ -149,6 +149,7 @@ const AdminAdmins: React.FC = () => {
 
   return (
     <div
+      style={{ padding: "2rem" }}
       className={[
         "question-browser",
         "question-browser--admin",
