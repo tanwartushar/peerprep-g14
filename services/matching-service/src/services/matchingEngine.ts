@@ -1,10 +1,20 @@
 /**
- * F4 / F6 / F5 queue matching: hard constraints (topic, programmingLanguage),
- * longest-waiting requester first within each (topic, language) group,
- * same difficulty before optional downward (F5), optional time preference (F2) as ranking only,
- * deterministic tie-breaks.
+ * F10.1 — Matching decision order (PeerPrep)
  *
- * Difficulty order: hard > medium > easy (F5.1).
+ * The engine receives **only** rows already filtered as eligible by the service layer:
+ * (1) active match request: `PENDING`, connected (`disconnectedAt == null`), not matched —
+ *     timeouts / reconnect-expired / cancelled are excluded before `findFirstPair` runs.
+ *
+ * Within the engine:
+ * (2–3) Group by hard constraints: same `topic`, same `programmingLanguage`.
+ * (4) Within each pool, consider requesters in **longest-waiting** order:
+ *     earliest `createdAt` first (then `userId`, then `id` for stability).
+ * (5–6) For each requester: try **same-difficulty** partners first; if none,
+ *       try **downward** only if `allowLowerDifficultyMatch` — never upward.
+ * (7) Among eligible partners at that difficulty stage, **prefer** exact `timeAvailableMinutes`
+ *     when both sides specified the same value; missing/mismatched time never blocks.
+ * (8) Deterministic tie-break: `createdAt` asc → `userId` asc → `id` asc.
+ * (9) Finalization is done in `matchRequestService.tryMatchQueue` (not here).
  */
 
 export type MatchRequestRow = {
@@ -27,11 +37,13 @@ export type MatchPairResult = {
   matchingType: MatchingTypeApi;
 };
 
-function topicLanguageKey(r: MatchRequestRow): string {
+function poolKey(r: MatchRequestRow): string {
   return `${r.topic}\0${r.programmingLanguage}`;
 }
 
-/** Deterministic ordering for tie-breaking (F6.3): createdAt, userId, id. */
+/**
+ * F10.1 §8 — Tie-break: earliest submission, then ascending `userId`, then `id`.
+ */
 export function compareMatchRequests(
   a: MatchRequestRow,
   b: MatchRequestRow,
@@ -43,10 +55,38 @@ export function compareMatchRequests(
   return a.id.localeCompare(b.id);
 }
 
+/** F10.1 §3–4 — Group eligible rows by `(topic, programmingLanguage)`. */
+export function groupByTopicAndLanguage(
+  eligible: MatchRequestRow[],
+): Map<string, MatchRequestRow[]> {
+  const byPool = new Map<string, MatchRequestRow[]>();
+  for (const r of eligible) {
+    const k = poolKey(r);
+    let list = byPool.get(k);
+    if (!list) {
+      list = [];
+      byPool.set(k, list);
+    }
+    list.push(r);
+  }
+  return byPool;
+}
+
+/** Deterministic order across pools (stable, readable). */
+export function sortedPoolKeys(byPool: Map<string, MatchRequestRow[]>): string[] {
+  return [...byPool.keys()].sort((a, b) => a.localeCompare(b));
+}
+
 /**
- * F2.5: among eligible partners, prefer exact time match when both specified the same value.
- * Returns 1 if preferred, 0 otherwise — used for descending sort.
+ * F10.1 §4 — Longest-waiting first = earliest `createdAt` (same as ascending queue fairness).
  */
+export function orderRequestersLongestWaitingFirst(
+  pool: MatchRequestRow[],
+): MatchRequestRow[] {
+  return [...pool].sort(compareMatchRequests);
+}
+
+/** F10.1 §7 — Prefer exact time match when both specified; ranking only. */
 function timePreferenceRank(
   requester: MatchRequestRow,
   candidate: MatchRequestRow,
@@ -57,8 +97,11 @@ function timePreferenceRank(
   return 0;
 }
 
-/** Sort eligible partners: time preference first (F2), then deterministic tie-break. */
-function sortPartnersForRequester(
+/**
+ * F10.1 §7–8 — Among partners already filtered by difficulty rules:
+ * prefer exact time match, then `compareMatchRequests`.
+ */
+function orderPartnerCandidates(
   requester: MatchRequestRow,
   partners: MatchRequestRow[],
 ): MatchRequestRow[] {
@@ -70,7 +113,7 @@ function sortPartnersForRequester(
   });
 }
 
-/** F5.1: Hard > Medium > Easy */
+/** F5.1 — Hard > Medium > Easy */
 const DIFFICULTY_RANK: Record<string, number> = {
   easy: 1,
   medium: 2,
@@ -81,7 +124,7 @@ function difficultyRank(d: string): number {
   return DIFFICULTY_RANK[d] ?? 0;
 }
 
-/** True iff partner’s requested difficulty is strictly lower than requester’s (F5.4.2). */
+/** True iff partner’s difficulty is strictly lower than requester’s (downward only). */
 export function isStrictlyLowerDifficulty(
   partnerDifficulty: string,
   requesterDifficulty: string,
@@ -90,65 +133,60 @@ export function isStrictlyLowerDifficulty(
 }
 
 /**
- * Finds the first pair to match: within each (topic, programmingLanguage) group,
- * try each requester in longest-waiting order; same-difficulty partners first (F5.3),
- * then downward only if requester.allowLowerDifficultyMatch (F5.4.1), never upward (F5.5).
- * F2 time preference ranks eligible partners only; never excludes candidates.
+ * F10.1 §5–6 — Same-difficulty partners first; downward only if opted in.
  */
-export function findFirstPair(
-  pending: MatchRequestRow[],
+function findPartnerForRequester(
+  requester: MatchRequestRow,
+  othersInPool: MatchRequestRow[],
 ): MatchPairResult | null {
-  if (pending.length < 2) return null;
+  const others = othersInPool.filter((p) => p.userId !== requester.userId);
 
-  const byGroup = new Map<string, MatchRequestRow[]>();
-  for (const r of pending) {
-    const k = topicLanguageKey(r);
-    let list = byGroup.get(k);
-    if (!list) {
-      list = [];
-      byGroup.set(k, list);
-    }
-    list.push(r);
+  const sameDifficulty = others.filter((p) => p.difficulty === requester.difficulty);
+  const bestSame = orderPartnerCandidates(requester, sameDifficulty)[0];
+  if (bestSame !== undefined) {
+    return {
+      requester,
+      partner: bestSame,
+      matchingType: "same_difficulty",
+    };
   }
 
-  const groupKeys = [...byGroup.keys()].sort((a, b) => a.localeCompare(b));
+  if (!requester.allowLowerDifficultyMatch) {
+    return null;
+  }
 
-  for (const k of groupKeys) {
-    const group = byGroup.get(k)!;
-    group.sort(compareMatchRequests);
+  const downward = others.filter((p) =>
+    isStrictlyLowerDifficulty(p.difficulty, requester.difficulty),
+  );
+  const bestDown = orderPartnerCandidates(requester, downward)[0];
+  if (bestDown !== undefined) {
+    return {
+      requester,
+      partner: bestDown,
+      matchingType: "downward",
+    };
+  }
 
-    for (const requester of group) {
-      const others = group.filter((p) => p.userId !== requester.userId);
+  return null;
+}
 
-      const sameDifficulty = others.filter(
-        (p) => p.difficulty === requester.difficulty,
-      );
-      const sortedSame = sortPartnersForRequester(requester, sameDifficulty);
-      const bestSame = sortedSame[0];
-      if (bestSame !== undefined) {
-        return {
-          requester,
-          partner: bestSame,
-          matchingType: "same_difficulty",
-        };
-      }
+/**
+ * F10.1 — Select the first pair that can be formed, scanning pools and requesters deterministically.
+ */
+export function findFirstPair(
+  eligiblePending: MatchRequestRow[],
+): MatchPairResult | null {
+  if (eligiblePending.length < 2) return null;
 
-      if (!requester.allowLowerDifficultyMatch) {
-        continue;
-      }
+  const byPool = groupByTopicAndLanguage(eligiblePending);
 
-      const downward = others.filter((p) =>
-        isStrictlyLowerDifficulty(p.difficulty, requester.difficulty),
-      );
-      const sortedDown = sortPartnersForRequester(requester, downward);
-      const bestDown = sortedDown[0];
-      if (bestDown !== undefined) {
-        return {
-          requester,
-          partner: bestDown,
-          matchingType: "downward",
-        };
-      }
+  for (const k of sortedPoolKeys(byPool)) {
+    const pool = byPool.get(k)!;
+    const requesters = orderRequestersLongestWaitingFirst(pool);
+
+    for (const requester of requesters) {
+      const pair = findPartnerForRequester(requester, pool);
+      if (pair !== null) return pair;
     }
   }
 

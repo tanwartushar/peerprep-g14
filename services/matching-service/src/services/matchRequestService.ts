@@ -10,7 +10,7 @@ import {
 } from "../config/reconnectGrace.js";
 import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
 import type { MatchRequestRow } from "../types/matchRequestRow.js";
-import { findFirstPair } from "./matchingEngine.js";
+import { findFirstPair, type MatchRequestRow as EngineMatchRequestRow } from "./matchingEngine.js";
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 type MRUpdateManyData = Prisma.MatchRequestUncheckedUpdateManyInput;
@@ -95,6 +95,25 @@ function computedMatchedTimeMinutes(
 function pendingMatchTimeoutCutoff(): Date {
   const sec = getMatchTimeoutSeconds();
   return new Date(Date.now() - sec * 1000);
+}
+
+/**
+ * F10.1 — Map DB rows to the engine input shape after eligibility filtering.
+ * Eligibility (enforced in `tryMatchQueue`): `PENDING`, `disconnectedAt == null`
+ * (connected / not beyond grace for matching), not `MATCHED`; `expirePendingRequests`
+ * runs first so timed-out and reconnect-expired rows are not `PENDING`.
+ */
+function toEngineRow(r: MatchRequestRow): EngineMatchRequestRow {
+  return {
+    id: r.id,
+    userId: r.userId,
+    topic: r.topic,
+    difficulty: r.difficulty,
+    programmingLanguage: r.programmingLanguage,
+    allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
+    timeAvailableMinutes: r.timeAvailableMinutes,
+    createdAt: r.createdAt,
+  };
 }
 
 /**
@@ -201,18 +220,7 @@ export async function tryMatchQueue(): Promise<void> {
         .map((r) => asMatchRow(r))
         .filter((r) => r.disconnectedAt === null);
 
-      const pair = findFirstPair(
-        pending.map((r) => ({
-          id: r.id,
-          userId: r.userId,
-          topic: r.topic,
-          difficulty: r.difficulty,
-          programmingLanguage: r.programmingLanguage,
-          allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
-          timeAvailableMinutes: r.timeAvailableMinutes,
-          createdAt: r.createdAt,
-        })),
-      );
+      const pair = findFirstPair(pending.map(toEngineRow));
       if (!pair) return;
 
       const { requester: a, partner: b, matchingType } = pair;
