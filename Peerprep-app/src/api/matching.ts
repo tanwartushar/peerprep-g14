@@ -66,6 +66,10 @@ export type MatchRequestResponse = {
   matchedTimeAvailableMinutes: number | null;
   /** Same-difficulty vs cross-level (downward) match when MATCHED */
   matchingType: "same_difficulty" | "downward" | null;
+  /** When PENDING: match-wait deadline (for display). Null otherwise. */
+  expiresAt: string | null;
+  /** Server match timeout seconds (display cap only). */
+  matchTimeoutSeconds: number;
   createdAt: string;
   updatedAt: string;
 };

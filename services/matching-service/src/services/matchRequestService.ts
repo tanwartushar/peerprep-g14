@@ -11,6 +11,24 @@ import {
 import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
 import { findFirstPair } from "./matchingEngine.js";
 
+/** Prisma `updateMany` uses `XOR` on mutation input types; an explicit unchecked shape avoids inference errors. */
+function matchedRowUpdateData(
+  partnerUserId: string,
+  partnerRequestId: string,
+  partnerDifficulty: string,
+  partnerTimeAvailableMinutes: number | null,
+  pairType: "SAME_DIFFICULTY" | "DOWNWARD",
+): Prisma.MatchRequestUncheckedUpdateManyInput {
+  return {
+    status: "MATCHED",
+    peerUserId: partnerUserId,
+    peerMatchRequestId: partnerRequestId,
+    peerRequestedDifficulty: partnerDifficulty,
+    peerTimeAvailableMinutes: partnerTimeAvailableMinutes,
+    matchingPairType: pairType,
+  };
+}
+
 export type MatchPeerDTO = {
   userId: string;
   matchRequestId: string;
@@ -41,6 +59,10 @@ export type MatchRequestDTO = {
   /** F9 — while temporarily disconnected (grace active) */
   disconnectedAt: string | null;
   reconnectDeadlineAt: string | null;
+  /** When status is PENDING: server-computed match-wait deadline (createdAt + timeout). Else null. */
+  expiresAt: string | null;
+  /** Server `MATCH_TIMEOUT_SECONDS` (for display cap; timeout status is still server-authoritative). */
+  matchTimeoutSeconds: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -77,7 +99,7 @@ async function expirePendingRequests(
     where: {
       status: "PENDING",
       disconnectedAt: { not: null },
-      reconnectDeadlineAt: { lt: now },
+      reconnectDeadlineAt: { lte: now },
     },
     data: {
       status: "RECONNECT_EXPIRED",
@@ -91,7 +113,7 @@ async function expirePendingRequests(
     where: {
       status: "PENDING",
       disconnectedAt: null,
-      createdAt: { lt: cutoff },
+      createdAt: { lte: cutoff },
     },
     data: { status: "TIMED_OUT" },
   });
@@ -131,6 +153,7 @@ function toDTO(row: {
   createdAt: Date;
   updatedAt: Date;
 }): MatchRequestDTO {
+  const timeoutSec = getMatchTimeoutSeconds();
   const peer =
     row.status === "MATCHED" &&
     row.peerUserId !== null &&
@@ -145,6 +168,13 @@ function toDTO(row: {
     row.timeAvailableMinutes,
     row.peerTimeAvailableMinutes,
   );
+
+  const expiresAt =
+    row.status === "PENDING"
+      ? new Date(
+          row.createdAt.getTime() + timeoutSec * 1000,
+        ).toISOString()
+      : null;
 
   return {
     id: row.id,
@@ -165,6 +195,8 @@ function toDTO(row: {
     message: dtoMessage(row.status),
     disconnectedAt: row.disconnectedAt?.toISOString() ?? null,
     reconnectDeadlineAt: row.reconnectDeadlineAt?.toISOString() ?? null,
+    expiresAt,
+    matchTimeoutSeconds: timeoutSec,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -174,72 +206,72 @@ export async function tryMatchQueue(): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await expirePendingRequests(tx);
 
-    const pendingRows = await tx.matchRequest.findMany({
-      where: { status: "PENDING" },
-    });
-    const pending = pendingRows.filter((r) => r.disconnectedAt === null);
+    while (true) {
+      const pendingRows = await tx.matchRequest.findMany({
+        where: { status: "PENDING" },
+      });
+      const pending = pendingRows.filter((r) => r.disconnectedAt === null);
 
-    const pair = findFirstPair(
-      pending.map((r) => ({
-        id: r.id,
-        userId: r.userId,
-        topic: r.topic,
-        difficulty: r.difficulty,
-        programmingLanguage: r.programmingLanguage,
-        allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
-        timeAvailableMinutes: r.timeAvailableMinutes,
-        createdAt: r.createdAt,
-      })),
-    );
-    if (!pair) return;
+      const pair = findFirstPair(
+        pending.map((r) => ({
+          id: r.id,
+          userId: r.userId,
+          topic: r.topic,
+          difficulty: r.difficulty,
+          programmingLanguage: r.programmingLanguage,
+          allowLowerDifficultyMatch: r.allowLowerDifficultyMatch,
+          timeAvailableMinutes: r.timeAvailableMinutes,
+          createdAt: r.createdAt,
+        })),
+      );
+      if (!pair) return;
 
-    const { requester: a, partner: b, matchingType } = pair;
+      const { requester: a, partner: b, matchingType } = pair;
 
-    const prismaPairType =
-      matchingType === "same_difficulty"
-        ? ("SAME_DIFFICULTY" as const)
-        : ("DOWNWARD" as const);
+      const prismaPairType =
+        matchingType === "same_difficulty"
+          ? ("SAME_DIFFICULTY" as const)
+          : ("DOWNWARD" as const);
 
-    const first = await tx.matchRequest.updateMany({
-      where: {
-        id: a.id,
-        status: "PENDING",
-        userId: a.userId,
-        disconnectedAt: null,
-      },
-      data: {
-        status: "MATCHED",
-        peerUserId: b.userId,
-        peerMatchRequestId: b.id,
-        peerRequestedDifficulty: b.difficulty,
-        peerTimeAvailableMinutes: b.timeAvailableMinutes,
-        matchingPairType: prismaPairType,
-      },
-    });
+      const first = await tx.matchRequest.updateMany({
+        where: {
+          id: a.id,
+          status: "PENDING",
+          userId: a.userId,
+          disconnectedAt: null,
+        },
+        data: matchedRowUpdateData(
+          b.userId,
+          b.id,
+          b.difficulty,
+          b.timeAvailableMinutes,
+          prismaPairType,
+        ),
+      });
 
-    if (first.count !== 1) {
-      return;
-    }
+      if (first.count !== 1) {
+        return;
+      }
 
-    const second = await tx.matchRequest.updateMany({
-      where: {
-        id: b.id,
-        status: "PENDING",
-        userId: b.userId,
-        disconnectedAt: null,
-      },
-      data: {
-        status: "MATCHED",
-        peerUserId: a.userId,
-        peerMatchRequestId: a.id,
-        peerRequestedDifficulty: a.difficulty,
-        peerTimeAvailableMinutes: a.timeAvailableMinutes,
-        matchingPairType: prismaPairType,
-      },
-    });
+      const second = await tx.matchRequest.updateMany({
+        where: {
+          id: b.id,
+          status: "PENDING",
+          userId: b.userId,
+          disconnectedAt: null,
+        },
+        data: matchedRowUpdateData(
+          a.userId,
+          a.id,
+          a.difficulty,
+          a.timeAvailableMinutes,
+          prismaPairType,
+        ),
+      });
 
-    if (second.count !== 1) {
-      throw new Error("Match finalization invariant failed");
+      if (second.count !== 1) {
+        throw new Error("Match finalization invariant failed");
+      }
     }
   });
 }
@@ -329,15 +361,39 @@ export async function disconnectMatchRequestForUser(
     now.getTime() + getReconnectGraceSeconds() * 1000,
   );
 
-  const updated = await prisma.matchRequest.update({
-    where: { id },
+  const updated = await prisma.matchRequest.updateMany({
+    where: {
+      id,
+      userId,
+      status: "PENDING",
+      disconnectedAt: null,
+    },
     data: {
       disconnectedAt: now,
       reconnectDeadlineAt: deadline,
     },
   });
 
-  return { ok: true, data: toDTO(updated) };
+  if (updated.count === 0) {
+    const again = await prisma.matchRequest.findFirst({
+      where: { id, userId },
+    });
+    if (!again) {
+      return { ok: false, code: "NOT_FOUND" };
+    }
+    if (again.status !== "PENDING") {
+      return { ok: false, code: "NOT_PENDING" };
+    }
+    return { ok: true, data: toDTO(again) };
+  }
+
+  const refreshed = await prisma.matchRequest.findFirst({
+    where: { id, userId },
+  });
+  if (!refreshed) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  return { ok: true, data: toDTO(refreshed) };
 }
 
 export async function reconnectMatchRequestForUser(
@@ -373,30 +429,108 @@ export async function reconnectMatchRequestForUser(
   }
 
   const now = new Date();
-  if (
-    row.reconnectDeadlineAt !== null &&
-    row.reconnectDeadlineAt.getTime() < now.getTime()
-  ) {
-    await prisma.matchRequest.updateMany({
-      where: { id, status: "PENDING" },
+  const deadlineMs = row.reconnectDeadlineAt?.getTime() ?? null;
+  const graceExpired =
+    deadlineMs !== null && deadlineMs <= now.getTime();
+
+  if (graceExpired) {
+    const expired = await prisma.matchRequest.updateMany({
+      where: {
+        id,
+        userId,
+        status: "PENDING",
+        disconnectedAt: { not: null },
+        reconnectDeadlineAt: { lte: now },
+      },
       data: {
         status: "RECONNECT_EXPIRED",
         disconnectedAt: null,
         reconnectDeadlineAt: null,
       },
     });
+    if (expired.count === 0) {
+      const again = await prisma.matchRequest.findFirst({
+        where: { id, userId },
+      });
+      if (!again) {
+        return { ok: false, code: "NOT_FOUND" };
+      }
+      if (again.status === "RECONNECT_EXPIRED") {
+        return { ok: false, code: "RECONNECT_EXPIRED" };
+      }
+      if (again.status === "PENDING" && again.disconnectedAt === null) {
+        try {
+          await tryMatchQueue();
+        } catch {
+          /* best-effort */
+        }
+        const after = await prisma.matchRequest.findFirst({
+          where: { id, userId },
+        });
+        return { ok: true, data: toDTO(after!) };
+      }
+      if (again.status !== "PENDING") {
+        return { ok: false, code: "NOT_PENDING" };
+      }
+      return { ok: false, code: "NOT_DISCONNECTED" };
+    }
     return { ok: false, code: "RECONNECT_EXPIRED" };
   }
 
-  const updated = await prisma.matchRequest.update({
-    where: { id },
+  const cleared = await prisma.matchRequest.updateMany({
+    where: {
+      id,
+      userId,
+      status: "PENDING",
+      disconnectedAt: { not: null },
+      OR: [
+        { reconnectDeadlineAt: null },
+        { reconnectDeadlineAt: { gt: now } },
+      ],
+    },
     data: {
       disconnectedAt: null,
       reconnectDeadlineAt: null,
     },
   });
 
-  return { ok: true, data: toDTO(updated) };
+  if (cleared.count === 0) {
+    const again = await prisma.matchRequest.findFirst({
+      where: { id, userId },
+    });
+    if (!again) {
+      return { ok: false, code: "NOT_FOUND" };
+    }
+    if (again.disconnectedAt === null && again.status === "PENDING") {
+      try {
+        await tryMatchQueue();
+      } catch {
+        /* best-effort */
+      }
+      const after = await prisma.matchRequest.findFirst({
+        where: { id, userId },
+      });
+      return { ok: true, data: toDTO(after!) };
+    }
+    if (again.status !== "PENDING") {
+      return { ok: false, code: "NOT_PENDING" };
+    }
+    return { ok: false, code: "NOT_DISCONNECTED" };
+  }
+
+  try {
+    await tryMatchQueue();
+  } catch {
+    /* best-effort */
+  }
+
+  const refreshed = await prisma.matchRequest.findFirst({
+    where: { id, userId },
+  });
+  if (!refreshed) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  return { ok: true, data: toDTO(refreshed) };
 }
 
 export async function cancelMatchRequestForUser(
@@ -409,6 +543,8 @@ export async function cancelMatchRequestForUser(
   | { ok: false; code: "TIMED_OUT" }
   | { ok: false; code: "RECONNECT_EXPIRED" }
 > {
+  await expirePendingRequests(prisma);
+
   const existing = await prisma.matchRequest.findFirst({
     where: { id, userId },
   });
@@ -426,8 +562,8 @@ export async function cancelMatchRequestForUser(
     return { ok: false, code: "NOT_PENDING" };
   }
 
-  const updated = await prisma.matchRequest.update({
-    where: { id },
+  const cancelled = await prisma.matchRequest.updateMany({
+    where: { id, userId, status: "PENDING" },
     data: {
       status: "CANCELLED",
       disconnectedAt: null,
@@ -435,5 +571,30 @@ export async function cancelMatchRequestForUser(
     },
   });
 
+  if (cancelled.count === 0) {
+    const again = await prisma.matchRequest.findFirst({
+      where: { id, userId },
+    });
+    if (!again) {
+      return { ok: false, code: "NOT_FOUND" };
+    }
+    if (again.status === "TIMED_OUT") {
+      return { ok: false, code: "TIMED_OUT" };
+    }
+    if (again.status === "RECONNECT_EXPIRED") {
+      return { ok: false, code: "RECONNECT_EXPIRED" };
+    }
+    if (again.status !== "PENDING") {
+      return { ok: false, code: "NOT_PENDING" };
+    }
+    return { ok: false, code: "NOT_PENDING" };
+  }
+
+  const updated = await prisma.matchRequest.findFirst({
+    where: { id, userId },
+  });
+  if (!updated) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
   return { ok: true, data: toDTO(updated) };
 }

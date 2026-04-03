@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Users, X, Clock } from "lucide-react";
 import { Button } from "../components/Button";
@@ -48,6 +48,26 @@ export const Matching: React.FC = () => {
   const [resumeNote, setResumeNote] = useState<string | null>(null);
 
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+  /** Display-only wait timer: aligned once from `createdAt`, then ticks locally (capped at server timeout). */
+  const timerBaseRef = useRef(0);
+  const timerAnchorMsRef = useRef<number | null>(null);
+  const matchTimeoutSecRef = useRef(60);
+
+  const syncWaitTimerFromServer = (createdAtIso: string, matchTimeoutSeconds: number) => {
+    matchTimeoutSecRef.current = matchTimeoutSeconds;
+    const createdAtMs = Date.parse(createdAtIso);
+    if (Number.isNaN(createdAtMs)) {
+      return;
+    }
+    const actualElapsed = Math.max(
+      0,
+      Math.floor((Date.now() - createdAtMs) / 1000),
+    );
+    const capped = Math.min(actualElapsed, matchTimeoutSeconds);
+    timerBaseRef.current = capped;
+    timerAnchorMsRef.current = Date.now();
+    setSecondsElapsed(capped);
+  };
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
@@ -165,6 +185,10 @@ export const Matching: React.FC = () => {
         }
 
         setResumeNote(null);
+        syncWaitTimerFromServer(
+          d.createdAt,
+          d.matchTimeoutSeconds ?? 60,
+        );
         setReady(true);
       }
     };
@@ -178,10 +202,16 @@ export const Matching: React.FC = () => {
   useEffect(() => {
     if (terminal !== "none" || !ready) return;
 
-    const timer = setInterval(() => {
-      setSecondsElapsed((prev: number) => prev + 1);
+    const timer = window.setInterval(() => {
+      const anchor = timerAnchorMsRef.current;
+      if (anchor == null) return;
+      const elapsed =
+        timerBaseRef.current +
+        Math.floor((Date.now() - anchor) / 1000);
+      const cap = matchTimeoutSecRef.current;
+      setSecondsElapsed(Math.min(elapsed, cap));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => window.clearInterval(timer);
   }, [terminal, ready]);
 
   /** F9 — page unload while actively waiting */
