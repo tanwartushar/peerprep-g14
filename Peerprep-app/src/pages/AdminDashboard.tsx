@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Plus, Edit2, Trash2, AlertCircle, Upload, X } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { Input } from "../components/Input";
@@ -19,6 +19,8 @@ import AppShell from "../components/AppShell";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import QuestionBrowser from "../components/QuestionBrowser";
+import QuestionImageManager from "../components/QuestionImageManager";
+import { uploadQuestionImage, deleteQuestionImage } from "../firebaseClient";
 
 // --- Types & Constants ---
 interface Question {
@@ -27,7 +29,7 @@ interface Question {
   topics: string[];
   difficulty: "easy" | "medium" | "hard";
   description?: string;
-  mediaUrl?: string;
+  imageUrls: string[];
 }
 
 const availabelTopics = [
@@ -58,12 +60,14 @@ export const AdminDashboard: React.FC = () => {
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<Omit<Question, "id">>({
     title: "",
     topics: [],
     difficulty: "easy",
     description: "",
-    mediaUrl: "",
+    imageUrls: [],
   });
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(
     null,
@@ -99,72 +103,69 @@ export const AdminDashboard: React.FC = () => {
   // --- Handlers ---
   const handleOpenCreate = () => {
     setEditingId(null);
+    setNewImageFiles([]);
     setFormData({
       title: "",
       topics: [],
       difficulty: "easy",
       description: "",
-      mediaUrl: "",
+      imageUrls: [],
     });
     setIsFormModalOpen(true);
   };
 
-  const handleOpenEdit = (q: Question) => {
+  const handleOpenEdit = (q: any) => {
     setEditingId(q.id);
+    setNewImageFiles([]);
     setFormData({
       title: q.title,
       topics: [...q.topics],
       difficulty: q.difficulty,
       description: q.description || "",
-      mediaUrl: q.mediaUrl || "",
+      imageUrls: q.imageUrls || [],
     });
     setIsFormModalOpen(true);
   };
 
-  const handleOpenDelete = (q: Question) => {
+  const handleOpenDelete = (q: any) => {
     setQuestionToDelete(q);
     setIsDeleteModalOpen(true);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setFormData((prev) => ({ ...prev, mediaUrl: url }));
-    }
-  };
-
-  const handleRemoveMedia = () => {
-    setFormData((prev) => ({ ...prev, mediaUrl: "" }));
-  };
-
-  const handleTopicSelect = (selectedTopic: string) => {
-    if (selectedTopic && !formData.topics.includes(selectedTopic)) {
-      setFormData((prev) => ({
-        ...prev,
-        topics: [...prev.topics, selectedTopic],
-      }));
-    }
-  };
-
-  const handleRemoveTopic = (topicToRemove: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      topics: prev.topics.filter((t) => t !== topicToRemove),
-    }));
+  const handleImageUrlsChange = (newUrls: string[]) => {
+    setFormData((prev) => ({ ...prev, imageUrls: newUrls }));
   };
 
   const handleSaveQuestion = async () => {
     if (!formData.title || formData.topics.length === 0) return;
 
+    setIsSaving(true);
     try {
+      let finalId = editingId;
+      const storageId = finalId || crypto.randomUUID();
+
+      const originalUrls = editingId 
+        ? questions.find((q) => q.id === editingId)?.imageUrls || [] 
+        : [];
+      const removedUrls = originalUrls.filter(url => !formData.imageUrls.includes(url));
+
+      let uploadedUrls: string[] = [];
+      if (newImageFiles.length > 0) {
+        const uploads = newImageFiles.map(file => uploadQuestionImage(storageId, file));
+        uploadedUrls = await Promise.all(uploads);
+      }
+
+      if (removedUrls.length > 0) {
+        await Promise.all(removedUrls.map(url => deleteQuestionImage(url).catch(console.error)));
+      }
+
+      const finalImageUrls = [...formData.imageUrls, ...uploadedUrls];
+      const payload = { ...formData, imageUrls: finalImageUrls };
+
       if (editingId) {
-        console.log("Updating ID:", editingId);
-        console.log("Payload:", formData);
-        const result = await updateQuestion(editingId, formData);
-        console.log("Update result:", result);
+        await updateQuestion(editingId, payload);
       } else {
-        await createQuestion(formData);
+        await createQuestion(payload);
       }
       setIsFormModalOpen(false);
       await loadQuestions();
@@ -173,6 +174,8 @@ export const AdminDashboard: React.FC = () => {
       alert(
         "Failed to save question. Please check the console or backend logs.",
       );
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -266,6 +269,7 @@ export const AdminDashboard: React.FC = () => {
               topics: question.topics,
               difficulty: question.difficulty,
               description: question.description,
+              imageUrls: question.imageUrls,
               attempts: 0,
             }))}
             isLoading={isLoading}
@@ -297,8 +301,8 @@ export const AdminDashboard: React.FC = () => {
         title={editingId ? "Edit Question" : "Add New Question"}
         footer={
           <>
-            <Button theme="admin" variant="solid" onClick={handleSaveQuestion}>
-              {editingId ? "Save Changes" : "Create Question"}
+            <Button theme="admin" variant="solid" onClick={handleSaveQuestion} disabled={isSaving}>
+              {isSaving ? "Saving..." : (editingId ? "Save Changes" : "Create Question")}
             </Button>
           </>
         }
@@ -351,36 +355,12 @@ export const AdminDashboard: React.FC = () => {
           />
 
           <div className="form-group">
-            <label className="form-label">Media / Photos (Optional)</label>
-            {!formData.mediaUrl ? (
-              <div className="media-upload-container">
-                <input
-                  type="file"
-                  accept="image/*,video/*"
-                  className="media-upload-input"
-                  onChange={handleFileUpload}
-                />
-                <Upload className="h-8 w-8 text-accent mx-auto mb-2 opacity-80" />
-                <p className="text-sm text-secondary">
-                  Click or drag file to upload
-                </p>
-              </div>
-            ) : (
-              <div className="media-preview-wrapper">
-                <img
-                  src={formData.mediaUrl}
-                  alt="Uploaded Media"
-                  className="media-preview"
-                />
-                <button
-                  className="remove-media-btn"
-                  onClick={handleRemoveMedia}
-                  title="Remove Media"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+            <QuestionImageManager
+              imageUrls={formData.imageUrls}
+              onChangeImageUrls={handleImageUrlsChange}
+              newFiles={newImageFiles}
+              onChangeNewFiles={setNewImageFiles}
+            />
           </div>
         </div>
       </Modal>

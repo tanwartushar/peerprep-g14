@@ -62,7 +62,7 @@ type Question struct {
 	Difficulty  string   `json:"difficulty" bson:"Difficulty"`
 	Topics      []string `json:"topics" bson:"Topics"`
 	CreatedAt   string   `json:"createdAt" bson:"CreatedAt"`
-	// image_url
+	ImageUrls   []string `json:"imageUrls" bson:"ImageUrls"`
 }
 
 // Stringer inteface
@@ -116,10 +116,11 @@ func initQuestion() Question{
 	quest_struct.Difficulty = ""
 	quest_struct.Topics = []string{}
 	quest_struct.CreatedAt = ""
+	quest_struct.ImageUrls = []string{}
 	return quest_struct
 }
 
-func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
+func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, imageUrls []string, client *mongo.Client) (any, error) {
 	doc := initQuestion()
 	topicstore := NewTopicStore()
 	// validateTitle(title)
@@ -139,6 +140,7 @@ func (q *QuestionService) CreateQuestion(title *string, desc *string, diff strin
 	doc.Description = *desc
 	doc.Difficulty = validatedLevel
 	doc.Topics = validatedTopics
+	doc.ImageUrls = imageUrls
 	doc.CreatedAt = time.Now().Format(time.DateTime)
 	
 	fmt.Printf("Inserting: \n")
@@ -208,7 +210,7 @@ func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Que
 	return &result, nil
 }
 
-func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, client *mongo.Client) error {
+func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, imageUrls []string, client *mongo.Client) error {
 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
@@ -233,6 +235,7 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 			"Description": *desc,
 			"Difficulty":  validatedLevel,
 			"Topics":      validatedTopics,
+			"ImageUrls":   imageUrls,
 		},
 	}
 

@@ -15,6 +15,7 @@ export interface QuestionBrowserItem {
   topics: string[];
   difficulty: QuestionDifficulty;
   description?: string;
+  imageUrls?: string[];
   attempts?: number;
 }
 
@@ -28,6 +29,7 @@ interface QuestionBrowserProps {
   onSelectedQuestionChange?: (question: QuestionBrowserItem) => void;
   onEditQuestion?: (question: QuestionBrowserItem) => void;
   onDeleteQuestion?: (question: QuestionBrowserItem) => void;
+  onDeleteImage?: (url: string) => void;
   showInfoCard?: boolean;
   infoTitle?: string;
 
@@ -215,6 +217,61 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
                   {getDifficultyLabel(selectedQuestion.difficulty)}
                 </div>
               </div>
+
+              {selectedQuestion.imageUrls && selectedQuestion.imageUrls.length > 0 && (
+                <div className="question-browser__section">
+                  <div className="question-browser__label">Images</div>
+                  
+                  {theme === "admin" ? (
+                    <div className="question-browser__tags">
+                      {selectedQuestion.imageUrls.map((url, i) => (
+                        <a 
+                          key={url} 
+                          href={url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="question-browser__tag"
+                          style={{ background: 'var(--accent-primary)', color: 'white', textDecoration: 'none' }}
+                        >
+                          View Image {i + 1}
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+                      {selectedQuestion.imageUrls.map((url, i) => (
+                        <div key={url} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <a 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'block',
+                              borderRadius: '8px',
+                              overflow: 'hidden',
+                              border: '1px solid var(--border-color)',
+                              backgroundColor: 'var(--bg-secondary)'
+                            }}
+                            title={`View full image ${i + 1}`}
+                          >
+                            <img 
+                              src={url} 
+                              alt={`Reference for ${selectedQuestion.title} ${i + 1}`} 
+                              style={{ 
+                                width: '100%', 
+                                height: 'auto', 
+                                maxHeight: '300px', 
+                                objectFit: 'contain',
+                                display: 'block'
+                              }} 
+                            />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="question-browser__section">
                 <div className="question-browser__label">

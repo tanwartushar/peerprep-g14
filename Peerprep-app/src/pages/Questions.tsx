@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Upload, X } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 import QuestionBrowser from "../components/QuestionBrowser";
+import QuestionImageManager from "../components/QuestionImageManager";
+import { uploadQuestionImage, deleteQuestionImage } from "../firebaseClient";
 import { Modal } from "../components/Modal";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
@@ -30,7 +32,7 @@ interface Question {
   topics: string[];
   difficulty: "easy" | "medium" | "hard";
   description?: string;
-  mediaUrl?: string;
+  imageUrls: string[];
 }
 
 const availableTopics = [
@@ -55,6 +57,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(
     null,
   );
@@ -64,7 +68,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     topics: [],
     difficulty: "easy",
     description: "",
-    mediaUrl: "",
+    imageUrls: [],
   });
 
   const getTopicLabel = (value: string) => {
@@ -104,29 +108,31 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setNewImageFiles([]);
     setFormData({
       title: "",
       topics: [],
       difficulty: "easy",
       description: "",
-      mediaUrl: "",
+      imageUrls: [],
     });
     setIsFormModalOpen(true);
   };
 
-  const handleOpenEdit = (question: Question) => {
+  const handleOpenEdit = (question: any) => {
     setEditingId(question.id);
+    setNewImageFiles([]);
     setFormData({
       title: question.title,
       topics: [...question.topics],
       difficulty: question.difficulty,
       description: question.description || "",
-      mediaUrl: question.mediaUrl || "",
+      imageUrls: question.imageUrls || [],
     });
     setIsFormModalOpen(true);
   };
 
-  const handleOpenDelete = (question: Question) => {
+  const handleOpenDelete = (question: any) => {
     setQuestionToDelete(question);
     setIsDeleteModalOpen(true);
   };
@@ -134,17 +140,41 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
   const handleSaveQuestion = async () => {
     if (!formData.title || formData.topics.length === 0) return;
 
+    setIsSaving(true);
     try {
+      let finalId = editingId;
+      const storageId = finalId || crypto.randomUUID();
+
+      const originalUrls = editingId 
+        ? questions.find((q) => q.id === editingId)?.imageUrls || [] 
+        : [];
+      const removedUrls = originalUrls.filter(url => !formData.imageUrls.includes(url));
+
+      let uploadedUrls: string[] = [];
+      if (newImageFiles.length > 0) {
+        const uploads = newImageFiles.map(file => uploadQuestionImage(storageId, file));
+        uploadedUrls = await Promise.all(uploads);
+      }
+
+      if (removedUrls.length > 0) {
+        await Promise.all(removedUrls.map(url => deleteQuestionImage(url).catch(console.error)));
+      }
+
+      const finalImageUrls = [...formData.imageUrls, ...uploadedUrls];
+      const payload = { ...formData, imageUrls: finalImageUrls };
+
       if (editingId) {
-        await updateQuestion(editingId, formData);
+        await updateQuestion(editingId, payload);
       } else {
-        await createQuestion(formData);
+        await createQuestion(payload);
       }
 
       setIsFormModalOpen(false);
       await loadQuestions();
     } catch (error) {
       console.error("Error saving question:", error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -161,16 +191,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    setFormData((prev) => ({ ...prev, mediaUrl: url }));
-  };
-
-  const handleRemoveMedia = () => {
-    setFormData((prev) => ({ ...prev, mediaUrl: "" }));
+  const handleImageUrlsChange = (newUrls: string[]) => {
+    setFormData((prev) => ({ ...prev, imageUrls: newUrls }));
   };
 
   return (
@@ -183,6 +205,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
           topics: question.topics,
           difficulty: question.difficulty,
           description: question.description,
+          imageUrls: question.imageUrls,
           attempts: 0,
         }))}
         isLoading={isLoading}
@@ -214,8 +237,9 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
                 theme="admin"
                 variant="solid"
                 onClick={handleSaveQuestion}
+                disabled={isSaving}
               >
-                {editingId ? "Save Changes" : "Create Question"}
+                {isSaving ? "Saving..." : (editingId ? "Save Changes" : "Create Question")}
               </Button>
             }
           >
@@ -275,39 +299,12 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
               />
 
               <div className="questions-form-group">
-                <label className="questions-form-label">
-                  Media / Photos (Optional)
-                </label>
-
-                {!formData.mediaUrl ? (
-                  <div className="questions-media-upload-container">
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      className="questions-media-upload-input"
-                      onChange={handleFileUpload}
-                    />
-                    <Upload className="h-8 w-8 text-accent mx-auto mb-2 opacity-80" />
-                    <p className="text-sm text-secondary">
-                      Click or drag file to upload
-                    </p>
-                  </div>
-                ) : (
-                  <div className="questions-media-preview-wrapper">
-                    <img
-                      src={formData.mediaUrl}
-                      alt="Uploaded Media"
-                      className="questions-media-preview"
-                    />
-                    <button
-                      className="questions-remove-media-btn"
-                      onClick={handleRemoveMedia}
-                      title="Remove Media"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <QuestionImageManager
+                  imageUrls={formData.imageUrls}
+                  onChangeImageUrls={handleImageUrlsChange}
+                  newFiles={newImageFiles}
+                  onChangeNewFiles={setNewImageFiles}
+                />
               </div>
             </div>
           </Modal>

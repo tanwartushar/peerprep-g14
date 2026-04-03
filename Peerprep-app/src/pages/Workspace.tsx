@@ -84,6 +84,18 @@ export const Workspace: React.FC = () => {
                                 Output: [1,2]
                             </pre>
                         </div>
+                        
+                        <div className="workspace-question-images" style={{ marginTop: '2rem' }}>
+                             <strong style={{ display: 'block', marginBottom: '1rem', color: 'var(--text-primary)' }}>Reference Images:</strong>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                 {/* This is a placeholder structure for dynamic images when the backend is connected to the workspace */}
+                                 <div className="workspace-image-container" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                     <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                                         [Question image would be displayed here]
+                                     </div>
+                                 </div>
+                             </div>
+                        </div>
                     </div>
                 </section>
 
