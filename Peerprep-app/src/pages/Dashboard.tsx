@@ -119,6 +119,7 @@ export const Dashboard: React.FC = () => {
             headerAlign="left"
             showDivider
             className="dashboard-content"
+            contentClassName="dashboard-session-scroll"
           >
             <div className="form-group">
               <Select
