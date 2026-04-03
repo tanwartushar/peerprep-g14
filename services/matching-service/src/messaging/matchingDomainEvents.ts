@@ -53,9 +53,11 @@ export function buildMatchFoundPayload(
   partner: EngineMatchRequestRow,
   matchingType: "same_difficulty" | "downward",
 ): MatchFoundEventPayload {
-  const [id1, id2] = [requester.id, partner.id].sort((x, y) =>
-    x.localeCompare(y),
-  );
+  /** Lexicographic order so `matchId === \`${requestAId}:${requestBId}\` and aligns with `userAId` / `userBId`. */
+  const [a, b] =
+    requester.id.localeCompare(partner.id) <= 0
+      ? [requester, partner]
+      : [partner, requester];
   const matchedTimeAvailableMinutes =
     requester.timeAvailableMinutes != null &&
     partner.timeAvailableMinutes != null &&
@@ -65,13 +67,13 @@ export function buildMatchFoundPayload(
 
   return {
     eventType: "match.found",
-    matchId: `${id1}:${id2}`,
-    requestAId: requester.id,
-    requestBId: partner.id,
-    userAId: requester.userId,
-    userBId: partner.userId,
-    topic: requester.topic,
-    programmingLanguage: requester.programmingLanguage,
+    matchId: `${a.id}:${b.id}`,
+    requestAId: a.id,
+    requestBId: b.id,
+    userAId: a.userId,
+    userBId: b.userId,
+    topic: a.topic,
+    programmingLanguage: a.programmingLanguage,
     requesterDifficulty: requester.difficulty,
     partnerDifficulty: partner.difficulty,
     matchingType,
@@ -165,13 +167,5 @@ export async function publishMatchQueueEffects(effects: {
   }
   for (const m of effects.matches) {
     await publishMatchFound(m);
-  }
-}
-
-export async function publishTimedOutRows(
-  rows: Array<{ id: string; userId: string }>,
-): Promise<void> {
-  for (const r of rows) {
-    await publishMatchTimedOut(r.id, r.userId);
   }
 }

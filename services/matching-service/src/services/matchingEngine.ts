@@ -129,7 +129,10 @@ export function isStrictlyLowerDifficulty(
   partnerDifficulty: string,
   requesterDifficulty: string,
 ): boolean {
-  return difficultyRank(partnerDifficulty) < difficultyRank(requesterDifficulty);
+  const pr = difficultyRank(partnerDifficulty);
+  const rr = difficultyRank(requesterDifficulty);
+  if (pr === 0 || rr === 0) return false;
+  return pr < rr;
 }
 
 /**

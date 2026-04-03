@@ -2,20 +2,21 @@
  * Minimal RabbitMQ topic publisher for domain events.
  * No connection on module load — first publish connects lazily.
  * If `RABBITMQ_URL` is unset, publishing is a no-op (no throw).
+ * Uses a confirm channel and `waitForConfirms()` so broker nacks are surfaced as errors.
  */
-import amqplib, { type Channel, type ChannelModel } from "amqplib";
+import amqplib, { type ChannelModel, type ConfirmChannel } from "amqplib";
 
 export const MATCHING_EVENTS_EXCHANGE = "matching.events";
 
 let connection: ChannelModel | null = null;
-let channel: Channel | null = null;
+let channel: ConfirmChannel | null = null;
 
 function resetConnection(): void {
   channel = null;
   connection = null;
 }
 
-async function ensureChannel(url: string): Promise<Channel | null> {
+async function ensureChannel(url: string): Promise<ConfirmChannel | null> {
   if (!connection) {
     const conn = await amqplib.connect(url);
     connection = conn;
@@ -29,7 +30,7 @@ async function ensureChannel(url: string): Promise<Channel | null> {
   }
   const conn = connection;
   if (!channel) {
-    channel = await conn.createChannel();
+    channel = await conn.createConfirmChannel();
     channel.on("error", (err: Error) => {
       console.error("[rabbitmq] channel error:", err.message);
       channel = null;
@@ -69,6 +70,7 @@ export async function publishToMatchingExchange(
         contentType: "application/json",
       },
     );
+    await ch.waitForConfirms();
   } catch (err) {
     resetConnection();
     throw err;

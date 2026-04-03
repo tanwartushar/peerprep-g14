@@ -14,6 +14,14 @@ import { requireUserId } from "../middleware/requireUserId.js";
 
 const router = Router();
 
+/** Same shape as other handlers; used when Prisma/IO throws unexpectedly. */
+const SERVER_ERROR_BODY = { error: "Could not complete the request" } as const;
+
+function sendServerError(res: Response, err: unknown): void {
+  console.error("[matching-routes]", err);
+  res.status(500).json(SERVER_ERROR_BODY);
+}
+
 router.post(
   "/requests",
   requireUserId,
@@ -35,7 +43,7 @@ router.post(
         res.status(400).json({ error: "Validation failed", details: e.issues });
         return;
       }
-      res.status(500).json({ error: "Could not save match request" });
+      sendServerError(res, e);
     }
   },
 );
@@ -50,12 +58,16 @@ router.get(
       res.status(400).json({ error: "Invalid request id" });
       return;
     }
-    const row = await getMatchRequestForUser(id, userId);
-    if (!row) {
-      res.status(404).json({ error: "Match request not found" });
-      return;
+    try {
+      const row = await getMatchRequestForUser(id, userId);
+      if (!row) {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+      res.status(200).json(row);
+    } catch (e) {
+      sendServerError(res, e);
     }
-    res.status(200).json(row);
   },
 );
 
@@ -69,32 +81,36 @@ router.delete(
       res.status(400).json({ error: "Invalid request id" });
       return;
     }
-    const result = await cancelMatchRequestForUser(id, userId);
-    if (result.ok) {
-      res.status(200).json(result.data);
-      return;
-    }
-    if (result.code === "NOT_FOUND") {
-      res.status(404).json({ error: "Match request not found" });
-      return;
-    }
-    if (result.code === "TIMED_OUT") {
+    try {
+      const result = await cancelMatchRequestForUser(id, userId);
+      if (result.ok) {
+        res.status(200).json(result.data);
+        return;
+      }
+      if (result.code === "NOT_FOUND") {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+      if (result.code === "TIMED_OUT") {
+        res.status(409).json({
+          error:
+            "This match request has timed out and cannot be cancelled. Start a new search from the dashboard.",
+        });
+        return;
+      }
+      if (result.code === "RECONNECT_EXPIRED") {
+        res.status(409).json({
+          error:
+            "This match request expired while you were disconnected. Start a new search from the dashboard.",
+        });
+        return;
+      }
       res.status(409).json({
-        error:
-          "This match request has timed out and cannot be cancelled. Start a new search from the dashboard.",
+        error: "Only pending match requests can be cancelled",
       });
-      return;
+    } catch (e) {
+      sendServerError(res, e);
     }
-    if (result.code === "RECONNECT_EXPIRED") {
-      res.status(409).json({
-        error:
-          "This match request expired while you were disconnected. Start a new search from the dashboard.",
-      });
-      return;
-    }
-    res.status(409).json({
-      error: "Only pending match requests can be cancelled",
-    });
   },
 );
 
@@ -108,18 +124,22 @@ router.post(
       res.status(400).json({ error: "Invalid request id" });
       return;
     }
-    const result = await disconnectMatchRequestForUser(id, userId);
-    if (result.ok) {
-      res.status(200).json(result.data);
-      return;
+    try {
+      const result = await disconnectMatchRequestForUser(id, userId);
+      if (result.ok) {
+        res.status(200).json(result.data);
+        return;
+      }
+      if (result.code === "NOT_FOUND") {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+      res.status(409).json({
+        error: "Only an active waiting match request can be marked disconnected",
+      });
+    } catch (e) {
+      sendServerError(res, e);
     }
-    if (result.code === "NOT_FOUND") {
-      res.status(404).json({ error: "Match request not found" });
-      return;
-    }
-    res.status(409).json({
-      error: "Only an active waiting match request can be marked disconnected",
-    });
   },
 );
 
@@ -133,31 +153,35 @@ router.post(
       res.status(400).json({ error: "Invalid request id" });
       return;
     }
-    const result = await reconnectMatchRequestForUser(id, userId);
-    if (result.ok) {
-      res.status(200).json(result.data);
-      return;
-    }
-    if (result.code === "NOT_FOUND") {
-      res.status(404).json({ error: "Match request not found" });
-      return;
-    }
-    if (result.code === "RECONNECT_EXPIRED") {
+    try {
+      const result = await reconnectMatchRequestForUser(id, userId);
+      if (result.ok) {
+        res.status(200).json(result.data);
+        return;
+      }
+      if (result.code === "NOT_FOUND") {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+      if (result.code === "RECONNECT_EXPIRED") {
+        res.status(409).json({
+          error:
+            "Reconnect grace has expired. You can start a new search from the dashboard.",
+        });
+        return;
+      }
+      if (result.code === "NOT_DISCONNECTED") {
+        res.status(409).json({
+          error: "This request is not in a disconnected state",
+        });
+        return;
+      }
       res.status(409).json({
-        error:
-          "Reconnect grace has expired. You can start a new search from the dashboard.",
+        error: "Only a pending match request can be reconnected",
       });
-      return;
+    } catch (e) {
+      sendServerError(res, e);
     }
-    if (result.code === "NOT_DISCONNECTED") {
-      res.status(409).json({
-        error: "This request is not in a disconnected state",
-      });
-      return;
-    }
-    res.status(409).json({
-      error: "Only a pending match request can be reconnected",
-    });
   },
 );
 
