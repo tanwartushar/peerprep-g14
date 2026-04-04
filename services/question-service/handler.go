@@ -6,8 +6,7 @@ import (
 	// "fmt"
 	// "context"
 	"net/http"
-	// "fmt"
-	// "time"
+	"strings"
 	
 	// "go.mongodb.org/mongo-driver/v2/mongo/readpref"
 	"github.com/tgonet/peerprep-g14/services/question-service/internal/database"
@@ -28,6 +27,7 @@ func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
         Description string `json:"description"`
         Difficulty string `json:"difficulty"`
         Topics []string `json:"topics"`
+        ImageUrls []string `json:"imageUrls"`
     }
 
 	// Bind JSON from the UI request
@@ -41,6 +41,7 @@ func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
 		&questDoc.Description, 
 		questDoc.Difficulty, 
 		questDoc.Topics, 
+		questDoc.ImageUrls,
 		database.Client)
 
 	if err != nil {
@@ -88,6 +89,7 @@ func (h *Handler) PutQuestionRequest(c *gin.Context) {
 		Description string   `json:"description"`
 		Difficulty  string   `json:"difficulty"`
 		Topics      []string `json:"topics"`
+		ImageUrls   []string `json:"imageUrls"`
 	}
 
 	if err := c.ShouldBindJSON(&questDoc); err != nil {
@@ -101,6 +103,7 @@ func (h *Handler) PutQuestionRequest(c *gin.Context) {
 		&questDoc.Description,
 		questDoc.Difficulty,
 		questDoc.Topics,
+		questDoc.ImageUrls,
 		database.Client,
 	)
 
@@ -137,7 +140,8 @@ func AdminOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role := c.GetHeader("X-User-Role")
 		
-		if role != "ADMIN" {
+		roleUpper := strings.ToUpper(role)
+		if roleUpper != "ADMIN" && roleUpper != "SUPERADMIN" && roleUpper != "SUPER_ADMIN" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: You must be an admin to perform this action"})
 			c.Abort()
 			return

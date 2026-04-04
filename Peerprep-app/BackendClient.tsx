@@ -14,7 +14,8 @@ export const fetchQuestions = async () => {
     const data = await response.json();
     return data.map((q: any) => ({ 
         ...q, id: q._id,
-        topics: q.topics ?? []
+        topics: q.topics ?? [],
+        imageUrls: q.imageUrls ?? []
      })); 
 };
 
