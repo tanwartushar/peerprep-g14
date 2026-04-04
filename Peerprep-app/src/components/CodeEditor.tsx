@@ -25,7 +25,8 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
         const ydoc = new Y.Doc();
         ydocRef.current = ydoc;
 
-        const wsUrl = 'ws://localhost/api/collaboration/ws'; 
+        // const wsUrl = 'ws://localhost/api/collaboration/ws'; 
+        const wsUrl = 'https://backend-server-kppd.onrender.com/api/collaboration/ws';
 
         const provider = new WebsocketProvider(wsUrl, sessionId, ydoc);
         providerRef.current = provider;
