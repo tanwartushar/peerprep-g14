@@ -1,20 +1,103 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge } from "lucide-react";
+import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
 import Card from "../components/Card";
+import { useAuth } from "../context/AuthContext";
+import { createMatchRequest } from "../api/matching";
+import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
+import { setActiveMatchRequestId } from "../matching/matchingSession";
+import {
+  loadMatchFormDraft,
+  saveMatchFormDraft,
+} from "../matching/matchFormDraft";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [difficulty, setDifficulty] = useState("");
-  const [topic, setTopic] = useState("");
+  const { userId, isLoading } = useAuth();
+  const [difficulty, setDifficulty] = useState(
+    () => loadMatchFormDraft()?.difficulty ?? "",
+  );
+  const [topic, setTopic] = useState(() => loadMatchFormDraft()?.topic ?? "");
+  const [programmingLanguage, setProgrammingLanguage] = useState(
+    () => loadMatchFormDraft()?.programmingLanguage ?? "",
+  );
+  const [allowLowerDifficultyMatch, setAllowLowerDifficultyMatch] = useState(
+    () => loadMatchFormDraft()?.allowLowerDifficultyMatch ?? false,
+  );
+  /** "" = no preference (F2 — omit from payload) */
+  const [timeAvailable, setTimeAvailable] = useState(
+    () => loadMatchFormDraft()?.timeAvailable ?? "",
+  );
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
 
-  const handleStartMatching = () => {
-    if (difficulty && topic) {
-      navigate("/matching", { state: { difficulty, topic } });
+  useEffect(() => {
+    saveMatchFormDraft({
+      topic,
+      difficulty,
+      programmingLanguage,
+      allowLowerDifficultyMatch,
+      timeAvailable,
+    });
+  }, [
+    topic,
+    difficulty,
+    programmingLanguage,
+    allowLowerDifficultyMatch,
+    timeAvailable,
+  ]);
+
+  const handleStartMatching = async () => {
+    setSubmitError(null);
+    if (!difficulty || !topic || !programmingLanguage) return;
+    const effectiveId = getEffectiveMatchingUserId(userId);
+    if (!effectiveId) {
+      setSubmitError("Sign in to find a match.");
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const result = await createMatchRequest(effectiveId, {
+        topic,
+        difficulty,
+        programmingLanguage,
+        allowLowerDifficultyMatch,
+        ...(timeAvailable !== ""
+          ? { timeAvailableMinutes: Number(timeAvailable) }
+          : {}),
+      });
+      if (result.ok) {
+        setActiveMatchRequestId(result.data.id);
+        navigate("/matching", {
+          state: {
+            difficulty,
+            topic,
+            programmingLanguage,
+            allowLowerDifficultyMatch,
+            timeAvailableMinutes:
+              timeAvailable !== "" ? Number(timeAvailable) : undefined,
+            requestId: result.data.id,
+          },
+        });
+        return;
+      }
+      if (result.status === 409) {
+        setSubmitError(
+          "You already have an active match request. Cancel it from the matching screen or wait.",
+        );
+        return;
+      }
+      setSubmitError(result.message || "Could not start matching.");
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Unexpected error starting match.";
+      setSubmitError(msg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -36,6 +119,22 @@ export const Dashboard: React.FC = () => {
     { value: "dp", label: "Dynamic Programming" },
   ];
 
+  const languageOptions = [
+    { value: "javascript", label: "JavaScript" },
+    { value: "typescript", label: "TypeScript" },
+    { value: "python", label: "Python" },
+    { value: "java", label: "Java" },
+    { value: "cpp", label: "C++" },
+    { value: "go", label: "Go" },
+  ];
+
+  const timeAvailableOptions = [
+    { value: "", label: "No preference" },
+    { value: "30", label: "30 minutes" },
+    { value: "45", label: "45 minutes" },
+    { value: "60", label: "60 minutes" },
+  ];
+
   return (
     <div className="animate-fade-in">
       <div className="dashboard-layout">
@@ -47,6 +146,7 @@ export const Dashboard: React.FC = () => {
             headerAlign="left"
             showDivider
             className="dashboard-content"
+            contentClassName="dashboard-session-scroll"
           >
             <div className="form-group">
               <Select
@@ -67,18 +167,66 @@ export const Dashboard: React.FC = () => {
                 className="mt-8"
                 leftIcon={<CircleGauge className="h-5 w-5" />}
               />
+
+              <Select
+                label="Programming Language"
+                placeholder="Select Language"
+                options={languageOptions}
+                value={programmingLanguage}
+                onChange={setProgrammingLanguage}
+                className="mt-8"
+                leftIcon={<Code2 className="h-5 w-5" />}
+              />
+
+              <Select
+                label="Time available (optional)"
+                placeholder="No preference"
+                options={timeAvailableOptions}
+                value={timeAvailable}
+                onChange={setTimeAvailable}
+                className="mt-8"
+                leftIcon={<Clock className="h-5 w-5" />}
+              />
+
+              <label className="dashboard-allow-lower mt-8">
+                <input
+                  type="checkbox"
+                  checked={allowLowerDifficultyMatch}
+                  onChange={(e) =>
+                    setAllowLowerDifficultyMatch(e.target.checked)
+                  }
+                />
+                <span>Allow lower difficulty match</span>
+              </label>
+              <p className="dashboard-allow-lower-hint text-secondary text-sm mt-2">
+                When on, you may be paired with someone who chose an easier
+                level (same topic and language). Same level is always tried
+                first.
+              </p>
             </div>
+
+            {submitError ? (
+              <p className="dashboard-match-error" role="alert">
+                {submitError}
+              </p>
+            ) : null}
 
             <Button
               size="md"
               variant="solid"
               theme="user"
               className="mt-8"
-              disabled={!difficulty || !topic}
-              onClick={handleStartMatching}
+              disabled={
+                !difficulty ||
+                !topic ||
+                !programmingLanguage ||
+                isLoading ||
+                isSubmitting
+              }
+              onClick={() => void handleStartMatching()}
               rightIcon={<Play className="h-5 w-5" />}
             >
-              Find a Match
+              {isSubmitting ? "Starting…" : "Find a Match"}
             </Button>
           </Card>
         </div>

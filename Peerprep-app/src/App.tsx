@@ -18,6 +18,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminAdmins from "./pages/AdminAdmins";
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
+import { MatchingDevUserInit } from "./dev/MatchingDevUserInit";
 
 // Helper: is the role an admin-level role?
 const isAdminRole = (role: string | null) =>
@@ -88,6 +89,7 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router>
+          <MatchingDevUserInit />
           <div className="app-wrapper">
             <main className="main-content">
               <Routes>

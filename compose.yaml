@@ -18,6 +18,7 @@ services:
       - frontend
       - user-service
       - question-service
+      - matching-service
 
   auth-service:
     ports:
@@ -77,11 +78,41 @@ services:
         - action: rebuild
           path: ./services/user-service/package.json
 
-  # --- SERVICE 2 (e.g., Matching Service) ---
-  # matching-service:
-  #   build:
-  #     context: ./matching-service
-  #     dockerfile: Dockerfile
+  rabbitmq:
+    image: rabbitmq:3-alpine
+    ports:
+      - "5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  # --- MATCHING SERVICE ---
+  matching-service:
+    ports:
+      - "3003:3003"
+    build:
+      context: ./services/matching-service
+      dockerfile: Dockerfile
+    tty: true
+    env_file:
+      - ./services/matching-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./services/matching-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/matching-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/matching-service/package.json
 
   # --- SERVICE 3 (e.g., Question Service) ---
   question-service:
@@ -112,3 +143,31 @@ services:
   #   image: mongo:latest            # Or postgres, redis, etc.
   #   ports:
   #     - "27017:27017"
+
+  # --- COLLABORATION SERVICE ---
+  collaboration-service:
+    ports:
+      - "3004:3004"
+    depends_on:
+      - matching-service
+    env_file:
+      - ./services/collaboration-service/.env
+    build:
+      context: ./services/collaboration-service
+      dockerfile: Dockerfile
+    tty: true
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - MATCHING_SERVICE_URL=http://matching-service:3003
+    volumes:
+      - ./services/collaboration-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/collaboration-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/collaboration-service/package.json
+
+volumes:
+  prometheus_data: {}
