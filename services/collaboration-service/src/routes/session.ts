@@ -12,7 +12,7 @@ const prisma = new PrismaClient({ adapter });
 // POST /api/collaboration/sessions
 router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
   try {
-    const { user1Id, user2Id, questionId, language } = req.body;
+    const { id, user1Id, user2Id, questionId, language } = req.body;
     
     if (!user1Id || !user2Id || !questionId || !language) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -20,6 +20,7 @@ router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
 
     const session = await prisma.session.create({
       data: {
+        ...(id ? { id } : {}),
         user1Id,
         user2Id,
         questionId,
@@ -28,7 +29,11 @@ router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
     });
 
     return res.status(201).json(session);
-  } catch (error) {
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      console.warn('Handling concurrent session creation gracefully (P2002)');
+      return res.status(409).json({ error: 'Session already exists' });
+    }
     console.error('Failed to create session:', error);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
