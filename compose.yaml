@@ -148,6 +148,8 @@ services:
   collaboration-service:
     ports:
       - "3004:3004"
+    depends_on:
+      - matching-service
     env_file:
       - ./services/collaboration-service/.env
     build:
@@ -156,6 +158,7 @@ services:
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
+      - MATCHING_SERVICE_URL=http://matching-service:3003
     volumes:
       - ./services/collaboration-service/src:/usr/src/app/src
     develop:

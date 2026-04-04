@@ -7,6 +7,7 @@ import { useCurrentUserProfile } from '../hooks/useCurrentUserProfile';
 import './Workspace.css';
 
 interface LocationState {
+    requestId?: string;
     difficulty?: string;
     topic?: string;
     programmingLanguage?: string;
@@ -33,7 +34,6 @@ export const Workspace: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const state = location.state as LocationState;
-
     const { data: profile } = useCurrentUserProfile();
     const currentUser = React.useMemo(() => {
         const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea', '#ed64a6'];
@@ -45,6 +45,105 @@ export const Workspace: React.FC = () => {
     }, [profile?.name]);
 
     const [code, setCode] = useState('// Write your solution here...\n\nfunction solution() {\n  \n}');
+    const [sessionId, setSessionId] = useState<string>('default-session');
+    const [question, setQuestion] = useState<any>(null);
+    const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+    React.useEffect(() => {
+        if (!state?.requestId || !state?.peerMatchRequestId) {
+            setIsSessionLoading(false);
+            return;
+        }
+
+        const computeId = [state.requestId, state.peerMatchRequestId].sort().join('-');
+        setSessionId(computeId);
+
+        let mounted = true;
+
+        const initSession = async () => {
+            try {
+                // 1. check if session already exists
+                const sessionRes = await fetch(`/api/collaboration/sessions/${computeId}`, {
+                    credentials: "include",
+                });
+                if (sessionRes.ok) {
+                    const sessionData = await sessionRes.json();
+
+                    // fetch question
+                    const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
+                    if (qRes.ok) {
+                        const qData = await qRes.json();
+                        if (mounted) setQuestion(qData);
+                    }
+                    if (mounted) setIsSessionLoading(false);
+                    return;
+                }
+
+                if (sessionRes.status === 404) {
+                    // 2. fetch a random question matching the topic & difficulty
+                    // since question-service returns an array for list endpoints, we try exact match first
+                    const formattedTopic = (state.topic || '').replace('-', '_');
+                    let qRes = await fetch(`/api/questions/?difficulty=${state.difficulty || 'medium'}&topic=${formattedTopic}`);
+                    let selectedQ: any = null;
+
+                    if (qRes.ok) {
+                        const qList = await qRes.json();
+                        if (qList && qList.length > 0) {
+                            selectedQ = qList[0];
+                        }
+                    }
+
+                    // fallback to match ONLY by difficulty if topic returned nothing
+                    if (!selectedQ) {
+                        qRes = await fetch(`/api/questions/?difficulty=${state.difficulty || 'medium'}`);
+                        if (qRes.ok) {
+                            const qList = await qRes.json();
+                            if (qList && qList.length > 0) {
+                                selectedQ = qList[0];
+                            }
+                        }
+                    }
+
+                    // fallback to ANY question if difficulty returned nothing
+                    if (!selectedQ) {
+                        qRes = await fetch(`/api/questions/`);
+                        if (qRes.ok) {
+                            const qList = await qRes.json();
+                            if (qList && qList.length > 0) {
+                                selectedQ = qList[0];
+                            }
+                        }
+                    }
+
+                    if (mounted && selectedQ) setQuestion(selectedQ);
+
+                    // 3. create the collaboration session
+                    const createRes = await fetch(`/api/collaboration/sessions`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            matchRequestId: state.requestId,
+                            peerMatchRequestId: state.peerMatchRequestId,
+                            questionId: selectedQ?.id || selectedQ?._id || 'fallback-question',
+                        }),
+                    });
+
+                    if (!createRes.ok && createRes.status !== 409) {
+                        console.error('Failed to create session', await createRes.text());
+                    }
+                    if (mounted) setIsSessionLoading(false);
+                }
+            } catch (err) {
+                console.error("Session creation failed:", err);
+                if (mounted) setIsSessionLoading(false);
+            }
+        };
+
+        void initSession();
+
+        return () => { mounted = false; };
+    }, [state]);
 
     const handleEndSession = () => {
         if (window.confirm('Are you sure you want to end this session?')) {
@@ -60,8 +159,8 @@ export const Workspace: React.FC = () => {
         state?.matchingType === 'downward'
             ? 'Downward match'
             : state?.matchingType === 'same_difficulty'
-              ? 'Same difficulty match'
-              : null;
+                ? 'Same difficulty match'
+                : null;
 
     const showMatchBanner = Boolean(state?.peerUserId);
 
@@ -137,19 +236,27 @@ export const Workspace: React.FC = () => {
                 {/* Left Panel: Question */}
                 <section className="panel question-panel">
                     <div className="panel-header">
-                        <h2 className="panel-title">1. Two Sum</h2>
+                        <h2 className="panel-title">{question?.title || "1. Two Sum"}</h2>
                         <div className="flex gap-2">
-                            <span className="tag-sm custom-tag text-success bg-success-light">Easy</span>
+                            <span className="tag-sm custom-tag text-success bg-success-light">
+                                {question?.complexity || state?.difficulty || "Easy"}
+                            </span>
                         </div>
                     </div>
                     <div className="panel-content prose custom-prose">
-                        <p>
-                            Given an array of integers <code>nums</code> and an integer <code>target</code>, return <em>indices of the two numbers such that they add up to <code>target</code></em>.
-                        </p>
-                        <p>
-                            You may assume that each input would have <strong><em>exactly</em> one solution</strong>, and you may not use the <em>same</em> element twice.
-                        </p>
-                        <p>You can return the answer in any order.</p>
+                        {question ? (
+                            <div dangerouslySetInnerHTML={{ __html: question.description }} />
+                        ) : (
+                            <>
+                                <p>
+                                    Given an array of integers <code>nums</code> and an integer <code>target</code>, return <em>indices of the two numbers such that they add up to <code>target</code></em>.
+                                </p>
+                                <p>
+                                    You may assume that each input would have <strong><em>exactly</em> one solution</strong>, and you may not use the <em>same</em> element twice.
+                                </p>
+                                <p>You can return the answer in any order.</p>
+                            </>
+                        )}
 
                         <div className="example-block">
                             <strong>Example 1:</strong>
@@ -167,17 +274,18 @@ export const Workspace: React.FC = () => {
                                 Output: [1,2]
                             </pre>
                         </div>
-                        
+
+
                         <div className="workspace-question-images" style={{ marginTop: '2rem' }}>
-                             <strong style={{ display: 'block', marginBottom: '1rem', color: 'var(--text-primary)' }}>Reference Images:</strong>
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                                 {/* This is a placeholder structure for dynamic images when the backend is connected to the workspace */}
-                                 <div className="workspace-image-container" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                                     <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
-                                         [Question image would be displayed here]
-                                     </div>
-                                 </div>
-                             </div>
+                            <strong style={{ display: 'block', marginBottom: '1rem', color: 'var(--text-primary)' }}>Reference Images:</strong>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {/* This is a placeholder structure for dynamic images when the backend is connected to the workspace */}
+                                <div className="workspace-image-container" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                                        [Question image would be displayed here]
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -203,11 +311,18 @@ export const Workspace: React.FC = () => {
                     </div>
 
                     <div className="editor-content" style={{ overflow: 'hidden' }}>
-                        <CodeEditor 
-                            value={code} 
-                            onChange={(val) => setCode(val || '')} 
-                            currentUser={currentUser}
-                        />
+                        {isSessionLoading ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                Connecting to a collaborative session...
+                            </div>
+                        ) : (
+                            <CodeEditor
+                                value={code}
+                                onChange={(val) => setCode(val || '')}
+                                currentUser={currentUser}
+                                sessionId={sessionId}
+                            />
+                        )}
                     </div>
 
                     <div className="editor-console">

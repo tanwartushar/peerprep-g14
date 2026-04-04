@@ -115,6 +115,7 @@ export const Matching: React.FC = () => {
         navigate("/workspace", {
           replace: true,
           state: {
+            requestId,
             difficulty: d.difficulty,
             topic: d.topic,
             programmingLanguage: d.programmingLanguage,
@@ -266,6 +267,7 @@ export const Matching: React.FC = () => {
         navigate("/workspace", {
           replace: true,
           state: {
+            requestId,
             difficulty: data.difficulty,
             topic: data.topic,
             programmingLanguage: data.programmingLanguage,

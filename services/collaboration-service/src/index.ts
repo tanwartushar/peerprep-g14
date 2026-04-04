@@ -27,7 +27,7 @@ const prisma = new PrismaClient({ adapter });
 app.use(cors());
 app.use(express.json());
 
-app.use('/api/collaboration', sessionRouter);
+app.use('/', sessionRouter);
 
 const server = createServer(app);
 
@@ -52,8 +52,8 @@ setPersistence({
       await prisma.session.upsert({
         where: { id: docName },
         update: { docState: Buffer.from(state) },
-        create: { 
-          id: docName, 
+        create: {
+          id: docName,
           docState: Buffer.from(state),
           user1Id: 'system',
           user2Id: 'system',
