@@ -12,13 +12,19 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    // Same pattern for all backends: send to local gateway (port 80), which routes to services.
     proxy: {
-      '/api': {
-        target: 'http://localhost',
+      "/api": {
+        target: "http://localhost",
         changeOrigin: true,
         secure: false,
-      }
-    }
+      },
+      "/matching": {
+        target: "http://localhost",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   // plugins: [
   //   react({
