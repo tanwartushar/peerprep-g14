@@ -4,6 +4,14 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { slidingWindowRateLimiter } from "./rateLimiter.js";
+
+const globalLimiter = slidingWindowRateLimiter({ windowMs: 60_000, max: 100 });
+const questionLimiter = slidingWindowRateLimiter({
+  windowMs: 60_000,
+  max: 30,
+  keyPrefix: 'rl:questions',
+});
 
 dotenv.config();
 
@@ -110,13 +118,13 @@ app.get('/api/auth/verify', verifyGateway, (req: any, res: any) => {
   });
 });
 
-app.use('/api/user', verifyGateway, createProxyMiddleware({
+app.use('/api/user', verifyGateway, globalLimiter, createProxyMiddleware({
   target: 'http://user-service:3001',
   changeOrigin: true,
 }));
 
 // Route /api/questions to question-service
-app.use('/api/questions', verifyGateway, createProxyMiddleware({
+app.use('/api/questions', verifyGateway, questionLimiter, createProxyMiddleware({
   target: 'http://question-service:3002',
   changeOrigin: true,
   pathRewrite: { '^/api/questions': '/' },
@@ -130,7 +138,7 @@ const collabProxy = createProxyMiddleware({
 });
 
 // Route /api/collaboration to collaboration-service
-app.use('/api/collaboration', verifyGateway, collabProxy);
+app.use('/api/collaboration', verifyGateway, globalLimiter, collabProxy);
 
 const server = app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
 
