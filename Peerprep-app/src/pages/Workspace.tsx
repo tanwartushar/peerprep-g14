@@ -7,15 +7,33 @@ import { useCurrentUserProfile } from '../hooks/useCurrentUserProfile';
 import './Workspace.css';
 
 interface LocationState {
+    requestId?: string;
     difficulty?: string;
     topic?: string;
+    programmingLanguage?: string;
+    peerUserId?: string;
+    peerMatchRequestId?: string;
+    peerRequestedDifficulty?: string | null;
+    matchingType?: 'same_difficulty' | 'downward' | null;
+    timeAvailableMinutes?: number | null;
+    peerTimeAvailableMinutes?: number | null;
+    matchedTimeAvailableMinutes?: number | null;
+}
+
+function formatDifficultyLabel(d: string | undefined): string {
+    if (!d) return '—';
+    return d.charAt(0).toUpperCase() + d.slice(1);
+}
+
+function formatMinutesLine(m: number | null | undefined): string {
+    if (m == null) return 'Not specified';
+    return `${m} min`;
 }
 
 export const Workspace: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const state = location.state as LocationState;
-
     const { data: profile } = useCurrentUserProfile();
     const currentUser = React.useMemo(() => {
         const colors = ['#f56565', '#ed8936', '#ecc94b', '#48bb78', '#38b2ac', '#4299e1', '#667eea', '#9f7aea', '#ed64a6'];
@@ -27,12 +45,124 @@ export const Workspace: React.FC = () => {
     }, [profile?.name]);
 
     const [code, setCode] = useState('// Write your solution here...\n\nfunction solution() {\n  \n}');
+    const [sessionId, setSessionId] = useState<string>('default-session');
+    const [question, setQuestion] = useState<any>(null);
+    const [isSessionLoading, setIsSessionLoading] = useState(true);
+
+    React.useEffect(() => {
+        if (!state?.requestId || !state?.peerMatchRequestId) {
+            setIsSessionLoading(false);
+            return;
+        }
+
+        const computeId = [state.requestId, state.peerMatchRequestId].sort().join('-');
+        setSessionId(computeId);
+
+        let mounted = true;
+
+        const initSession = async () => {
+            try {
+                // 1. check if session already exists
+                const sessionRes = await fetch(`/api/collaboration/sessions/${computeId}`, {
+                    credentials: "include",
+                });
+                if (sessionRes.ok) {
+                    const sessionData = await sessionRes.json();
+
+                    // fetch question
+                    const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
+                    if (qRes.ok) {
+                        const qData = await qRes.json();
+                        if (mounted) setQuestion(qData);
+                    }
+                    if (mounted) setIsSessionLoading(false);
+                    return;
+                }
+
+                if (sessionRes.status === 404) {
+                    // 2. fetch a random question matching the topic & difficulty
+                    // since question-service returns an array for list endpoints, we try exact match first
+                    const formattedTopic = (state.topic || '').replace('-', '_');
+                    let qRes = await fetch(`/api/questions/?difficulty=${state.difficulty || 'medium'}&topic=${formattedTopic}`);
+                    let selectedQ: any = null;
+
+                    if (qRes.ok) {
+                        const qList = await qRes.json();
+                        if (qList && qList.length > 0) {
+                            selectedQ = qList[0];
+                        }
+                    }
+
+                    // fallback to match ONLY by difficulty if topic returned nothing
+                    if (!selectedQ) {
+                        qRes = await fetch(`/api/questions/?difficulty=${state.difficulty || 'medium'}`);
+                        if (qRes.ok) {
+                            const qList = await qRes.json();
+                            if (qList && qList.length > 0) {
+                                selectedQ = qList[0];
+                            }
+                        }
+                    }
+
+                    // fallback to ANY question if difficulty returned nothing
+                    if (!selectedQ) {
+                        qRes = await fetch(`/api/questions/`);
+                        if (qRes.ok) {
+                            const qList = await qRes.json();
+                            if (qList && qList.length > 0) {
+                                selectedQ = qList[0];
+                            }
+                        }
+                    }
+
+                    if (mounted && selectedQ) setQuestion(selectedQ);
+
+                    // 3. create the collaboration session
+                    const createRes = await fetch(`/api/collaboration/sessions`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({
+                            matchRequestId: state.requestId,
+                            peerMatchRequestId: state.peerMatchRequestId,
+                            questionId: selectedQ?.id || selectedQ?._id || 'fallback-question',
+                        }),
+                    });
+
+                    if (!createRes.ok && createRes.status !== 409) {
+                        console.error('Failed to create session', await createRes.text());
+                    }
+                    if (mounted) setIsSessionLoading(false);
+                }
+            } catch (err) {
+                console.error("Session creation failed:", err);
+                if (mounted) setIsSessionLoading(false);
+            }
+        };
+
+        void initSession();
+
+        return () => { mounted = false; };
+    }, [state]);
 
     const handleEndSession = () => {
         if (window.confirm('Are you sure you want to end this session?')) {
-            navigate('/dashboard');
+            navigate('/user/dashboard');
         }
     };
+
+    const yourDifficulty = formatDifficultyLabel(state?.difficulty);
+    const partnerDifficulty = formatDifficultyLabel(
+        state?.peerRequestedDifficulty ?? undefined,
+    );
+    const matchKindLabel =
+        state?.matchingType === 'downward'
+            ? 'Downward match'
+            : state?.matchingType === 'same_difficulty'
+                ? 'Same difficulty match'
+                : null;
+
+    const showMatchBanner = Boolean(state?.peerUserId);
 
     return (
         <div className="workspace-layout">
@@ -46,39 +176,87 @@ export const Workspace: React.FC = () => {
                     <div className="session-info">
                         <span className="tag-sm">{state?.difficulty || 'Medium'}</span>
                         <span className="tag-sm">{state?.topic || 'Arrays'}</span>
+                        {state?.programmingLanguage ? (
+                            <span className="tag-sm">{state.programmingLanguage}</span>
+                        ) : null}
                     </div>
                 </div>
 
                 <div className="header-right">
                     <div className="peer-status">
                         <div className="status-indicator online"></div>
-                        <span className="text-sm text-secondary">Peer Connected</span>
+                        <span className="text-sm text-secondary">
+                            {state?.peerUserId ? `Peer: ${state.peerUserId}` : 'Peer Connected'}
+                        </span>
                     </div>
-                    <Button variant="danger" size="sm" onClick={handleEndSession}>
+                    <Button variant="solid" theme="user" size="sm" onClick={handleEndSession}>
                         <LogOut className="h-4 w-4 mr-2" />
                         End Session
                     </Button>
                 </div>
             </header>
 
+            {showMatchBanner ? (
+                <div className="workspace-match-banner" role="status">
+                    {matchKindLabel ? (
+                        <>
+                            <p className="workspace-match-banner__title">Match</p>
+                            <p className="workspace-match-banner__line">
+                                <strong>Your requested difficulty:</strong> {yourDifficulty}
+                                {' · '}
+                                <strong>Partner requested difficulty:</strong> {partnerDifficulty}
+                            </p>
+                            <p className="workspace-match-banner__kind">{matchKindLabel}</p>
+                        </>
+                    ) : null}
+
+                    <p className="workspace-match-banner__title workspace-match-banner__title--sub">
+                        Session time (optional preference)
+                    </p>
+                    <p className="workspace-match-banner__line">
+                        <strong>Yours:</strong> {formatMinutesLine(state?.timeAvailableMinutes)}
+                        {' · '}
+                        <strong>Partner:</strong>{' '}
+                        {formatMinutesLine(state?.peerTimeAvailableMinutes)}
+                    </p>
+                    <p className="workspace-match-banner__line">
+                        <strong>Aligned time (both chose the same):</strong>{' '}
+                        {state?.matchedTimeAvailableMinutes != null
+                            ? `${state.matchedTimeAvailableMinutes} min`
+                            : '—'}
+                    </p>
+                    <p className="workspace-match-banner__hint">
+                        Time is a soft preference — different or missing times do not block matching.
+                    </p>
+                </div>
+            ) : null}
+
             {/* Main Workspace Area */}
             <main className="workspace-main">
                 {/* Left Panel: Question */}
                 <section className="panel question-panel">
                     <div className="panel-header">
-                        <h2 className="panel-title">1. Two Sum</h2>
+                        <h2 className="panel-title">{question?.title || "1. Two Sum"}</h2>
                         <div className="flex gap-2">
-                            <span className="tag-sm custom-tag text-success bg-success-light">Easy</span>
+                            <span className="tag-sm custom-tag text-success bg-success-light">
+                                {question?.complexity || state?.difficulty || "Easy"}
+                            </span>
                         </div>
                     </div>
                     <div className="panel-content prose custom-prose">
-                        <p>
-                            Given an array of integers <code>nums</code> and an integer <code>target</code>, return <em>indices of the two numbers such that they add up to <code>target</code></em>.
-                        </p>
-                        <p>
-                            You may assume that each input would have <strong><em>exactly</em> one solution</strong>, and you may not use the <em>same</em> element twice.
-                        </p>
-                        <p>You can return the answer in any order.</p>
+                        {question ? (
+                            <div dangerouslySetInnerHTML={{ __html: question.description }} />
+                        ) : (
+                            <>
+                                <p>
+                                    Given an array of integers <code>nums</code> and an integer <code>target</code>, return <em>indices of the two numbers such that they add up to <code>target</code></em>.
+                                </p>
+                                <p>
+                                    You may assume that each input would have <strong><em>exactly</em> one solution</strong>, and you may not use the <em>same</em> element twice.
+                                </p>
+                                <p>You can return the answer in any order.</p>
+                            </>
+                        )}
 
                         <div className="example-block">
                             <strong>Example 1:</strong>
@@ -95,6 +273,19 @@ export const Workspace: React.FC = () => {
                                 Input: nums = [3,2,4], target = 6{'\n'}
                                 Output: [1,2]
                             </pre>
+                        </div>
+
+
+                        <div className="workspace-question-images" style={{ marginTop: '2rem' }}>
+                            <strong style={{ display: 'block', marginBottom: '1rem', color: 'var(--text-primary)' }}>Reference Images:</strong>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {/* This is a placeholder structure for dynamic images when the backend is connected to the workspace */}
+                                <div className="workspace-image-container" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                                        [Question image would be displayed here]
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -120,11 +311,18 @@ export const Workspace: React.FC = () => {
                     </div>
 
                     <div className="editor-content" style={{ overflow: 'hidden' }}>
-                        <CodeEditor 
-                            value={code} 
-                            onChange={(val) => setCode(val || '')} 
-                            currentUser={currentUser}
-                        />
+                        {isSessionLoading ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                Connecting to a collaborative session...
+                            </div>
+                        ) : (
+                            <CodeEditor
+                                value={code}
+                                onChange={(val) => setCode(val || '')}
+                                currentUser={currentUser}
+                                sessionId={sessionId}
+                            />
+                        )}
                     </div>
 
                     <div className="editor-console">

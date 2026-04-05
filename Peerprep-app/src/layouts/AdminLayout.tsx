@@ -9,7 +9,9 @@ import { useAuth } from "../context/AuthContext";
 const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, userRole } = useAuth();
+
+  const isSuperAdmin = userRole === "SUPER_ADMIN";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -26,12 +28,6 @@ const AdminLayout: React.FC = () => {
 
   const topItems = [
     {
-      key: "dashboard",
-      label: "Dashboard",
-      active: location.pathname === "/admin/dashboard",
-      onClick: () => navigate("/admin/dashboard"),
-    },
-    {
       key: "questions",
       label: "Questions",
       active: location.pathname.startsWith("/admin/questions"),
@@ -43,15 +39,29 @@ const AdminLayout: React.FC = () => {
       active: location.pathname.startsWith("/admin/users"),
       onClick: () => navigate("/admin/users"),
     },
+    // "Admins" tab is only visible to super admins
+    ...(isSuperAdmin
+      ? [
+          {
+            key: "admins",
+            label: "Admins",
+            active: location.pathname.startsWith("/admin/admins"),
+            onClick: () => navigate("/admin/admins"),
+          },
+        ]
+      : []),
   ];
 
   const pageNameMap: Record<string, string> = {
-    "/admin/dashboard": "Dashboard",
     "/admin/questions": "Questions",
     "/admin/users": "Users",
+    "/admin/admins": "Admins",
   };
 
-  const pageName = pageNameMap[location.pathname] ?? "";
+  const pageName =
+    Object.entries(pageNameMap).find(([path]) =>
+      location.pathname.startsWith(path),
+    )?.[1] ?? "";
 
   const bottomItems = [
     {

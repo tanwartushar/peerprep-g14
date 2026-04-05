@@ -31,3 +31,4 @@ yarn-error.log*
 # --- Docker ---
 # If you use local data volumes for databases
 /data/
+services/question-service/env

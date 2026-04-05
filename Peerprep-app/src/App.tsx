@@ -8,21 +8,28 @@ import {
 import { Dashboard } from "./pages/Dashboard";
 import { Matching } from "./pages/Matching";
 import { Workspace } from "./pages/Workspace";
-// import { AdminDashboard } from "./pages/AdminDashboard";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import { Query, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./App.css";
 import { Login } from "./pages/Login";
 import Questions from "./pages/Questions";
+import AdminUsers from "./pages/AdminUsers";
+import AdminAdmins from "./pages/AdminAdmins";
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
+import { MatchingDevUserInit } from "./dev/MatchingDevUserInit";
+
+// Helper: is the role an admin-level role?
+const isAdminRole = (role: string | null) =>
+  role === "ADMIN" || role === "SUPER_ADMIN";
 
 // A component to protect routes that require authentication
 const ProtectedRoute: React.FC<{
   children: React.ReactNode;
   adminOnly?: boolean;
-}> = ({ children, adminOnly = false }) => {
+  superAdminOnly?: boolean;
+}> = ({ children, adminOnly = false, superAdminOnly = false }) => {
   const { isAuthenticated, isLoading, userRole } = useAuth();
 
   if (isLoading) {
@@ -30,14 +37,18 @@ const ProtectedRoute: React.FC<{
       <div className="flex-center" style={{ height: "100vh", color: "white" }}>
         Loading...
       </div>
-    ); // Could replace with a better spinner
+    );
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
   }
 
-  if (adminOnly && userRole !== "ADMIN") {
+  if (superAdminOnly && userRole !== "SUPER_ADMIN") {
+    return <Navigate to="/admin/questions" replace />;
+  }
+
+  if (adminOnly && !isAdminRole(userRole)) {
     return <Navigate to="/user/dashboard" replace />;
   }
 
@@ -57,7 +68,7 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   if (isAuthenticated) {
-    return userRole === "ADMIN" ? (
+    return isAdminRole(userRole) ? (
       <Navigate to="/admin/questions" replace />
     ) : (
       <Navigate to="/user/dashboard" replace />
@@ -68,7 +79,6 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App: React.FC = () => {
-  // Adding a simple effect to log that the app initialized successfully
   useEffect(() => {
     console.log("PeerPrep Frontend Initialized - Powered by React & Vite");
   }, []);
@@ -79,6 +89,7 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router>
+          <MatchingDevUserInit />
           <div className="app-wrapper">
             <main className="main-content">
               <Routes>
@@ -93,7 +104,6 @@ const App: React.FC = () => {
                 />
 
                 <Route element={<UserLayout />}>
-                  {/* Protected routes */}
                   {/* User routes */}
                   <Route
                     path="/user/dashboard"
@@ -146,6 +156,22 @@ const App: React.FC = () => {
                     element={
                       <ProtectedRoute adminOnly>
                         <Questions theme="admin" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/users"
+                    element={
+                      <ProtectedRoute adminOnly>
+                        <AdminUsers />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/admins"
+                    element={
+                      <ProtectedRoute superAdminOnly>
+                        <AdminAdmins />
                       </ProtectedRoute>
                     }
                   />
