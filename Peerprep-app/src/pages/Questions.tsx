@@ -32,6 +32,8 @@ interface Question {
   topics: string[];
   difficulty: "easy" | "medium" | "hard";
   description?: string;
+  constraint?: string;
+  expectedOutput?: string;
   imageUrls: string[];
 }
 
@@ -68,6 +70,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     topics: [],
     difficulty: "easy",
     description: "",
+    constraint: "",
+    expectedOutput: "",
     imageUrls: [],
   });
 
@@ -114,6 +118,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       topics: [],
       difficulty: "easy",
       description: "",
+      constraint: "",
+      expectedOutput: "",
       imageUrls: [],
     });
     setIsFormModalOpen(true);
@@ -127,6 +133,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       topics: [...question.topics],
       difficulty: question.difficulty,
       description: question.description || "",
+      constraint: question.constraint || "",
+      expectedOutput: question.expectedOutput || "",
       imageUrls: question.imageUrls || [],
     });
     setIsFormModalOpen(true);
@@ -145,19 +153,27 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       let finalId = editingId;
       const storageId = finalId || crypto.randomUUID();
 
-      const originalUrls = editingId 
-        ? questions.find((q) => q.id === editingId)?.imageUrls || [] 
+      const originalUrls = editingId
+        ? questions.find((q) => q.id === editingId)?.imageUrls || []
         : [];
-      const removedUrls = originalUrls.filter(url => !formData.imageUrls.includes(url));
+      const removedUrls = originalUrls.filter(
+        (url) => !formData.imageUrls.includes(url),
+      );
 
       let uploadedUrls: string[] = [];
       if (newImageFiles.length > 0) {
-        const uploads = newImageFiles.map(file => uploadQuestionImage(storageId, file));
+        const uploads = newImageFiles.map((file) =>
+          uploadQuestionImage(storageId, file),
+        );
         uploadedUrls = await Promise.all(uploads);
       }
 
       if (removedUrls.length > 0) {
-        await Promise.all(removedUrls.map(url => deleteQuestionImage(url).catch(console.error)));
+        await Promise.all(
+          removedUrls.map((url) =>
+            deleteQuestionImage(url).catch(console.error),
+          ),
+        );
       }
 
       const finalImageUrls = [...formData.imageUrls, ...uploadedUrls];
@@ -205,6 +221,8 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
           topics: question.topics,
           difficulty: question.difficulty,
           description: question.description,
+          constraint: question.constraint,
+          expectedOutput: question.expectedOutput,
           imageUrls: question.imageUrls,
           attempts: 0,
         }))}
@@ -239,7 +257,11 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
                 onClick={handleSaveQuestion}
                 disabled={isSaving}
               >
-                {isSaving ? "Saving..." : (editingId ? "Save Changes" : "Create Question")}
+                {isSaving
+                  ? "Saving..."
+                  : editingId
+                    ? "Save Changes"
+                    : "Create Question"}
               </Button>
             }
           >
@@ -266,6 +288,32 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
                   setFormData((prev) => ({
                     ...prev,
                     description: e.target.value,
+                  }))
+                }
+              />
+
+              <TextArea
+                theme="admin"
+                label="Constraints"
+                placeholder="Provide constraints of the problem..."
+                value={formData.constraint ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    constraint: e.target.value,
+                  }))
+                }
+              />
+
+              <TextArea
+                theme="admin"
+                label="Expected Output"
+                placeholder="Provide the expected output of the problem..."
+                value={formData.expectedOutput ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    expectedOutput: e.target.value,
                   }))
                 }
               />
