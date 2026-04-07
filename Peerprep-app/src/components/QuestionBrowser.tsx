@@ -15,6 +15,8 @@ export interface QuestionBrowserItem {
   topics: string[];
   difficulty: QuestionDifficulty;
   description?: string;
+  constraint?: string;
+  expectedOutput?: string;
   imageUrls?: string[];
   attempts?: number;
 }
@@ -196,6 +198,22 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
               </div>
 
               <div className="question-browser__section">
+                <div className="question-browser__label">Constraints</div>
+                <div className="question-browser__value question-browser__value--multiline">
+                  {selectedQuestion.constraint?.trim() ||
+                    "No constraint provided."}
+                </div>
+              </div>
+
+              <div className="question-browser__section">
+                <div className="question-browser__label">Expected Output</div>
+                <div className="question-browser__value question-browser__value--multiline">
+                  {selectedQuestion.expectedOutput?.trim() ||
+                    "No expected output provided."}
+                </div>
+              </div>
+
+              <div className="question-browser__section">
                 <div className="question-browser__label">Topics</div>
                 <div className="question-browser__tags">
                   {selectedQuestion.topics.map((topic) => (
@@ -218,60 +236,79 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
                 </div>
               </div>
 
-              {selectedQuestion.imageUrls && selectedQuestion.imageUrls.length > 0 && (
-                <div className="question-browser__section">
-                  <div className="question-browser__label">Images</div>
-                  
-                  {theme === "admin" ? (
-                    <div className="question-browser__tags">
-                      {selectedQuestion.imageUrls.map((url, i) => (
-                        <a 
-                          key={url} 
-                          href={url} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="question-browser__tag"
-                          style={{ background: 'var(--accent-primary)', color: 'white', textDecoration: 'none' }}
-                        >
-                          View Image {i + 1}
-                        </a>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
-                      {selectedQuestion.imageUrls.map((url, i) => (
-                        <div key={url} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                          <a 
-                            href={url} 
-                            target="_blank" 
+              {selectedQuestion.imageUrls &&
+                selectedQuestion.imageUrls.length > 0 && (
+                  <div className="question-browser__section">
+                    <div className="question-browser__label">Images</div>
+
+                    {theme === "admin" ? (
+                      <div className="question-browser__tags">
+                        {selectedQuestion.imageUrls.map((url, i) => (
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
                             rel="noopener noreferrer"
+                            className="question-browser__tag"
                             style={{
-                              display: 'block',
-                              borderRadius: '8px',
-                              overflow: 'hidden',
-                              border: '1px solid var(--border-color)',
-                              backgroundColor: 'var(--bg-secondary)'
+                              background: "var(--accent-primary)",
+                              color: "white",
+                              textDecoration: "none",
                             }}
-                            title={`View full image ${i + 1}`}
                           >
-                            <img 
-                              src={url} 
-                              alt={`Reference for ${selectedQuestion.title} ${i + 1}`} 
-                              style={{ 
-                                width: '100%', 
-                                height: 'auto', 
-                                maxHeight: '300px', 
-                                objectFit: 'contain',
-                                display: 'block'
-                              }} 
-                            />
+                            View Image {i + 1}
                           </a>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                        ))}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.75rem",
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        {selectedQuestion.imageUrls.map((url, i) => (
+                          <div
+                            key={url}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.25rem",
+                            }}
+                          >
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "block",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid var(--border-color)",
+                                backgroundColor: "var(--bg-secondary)",
+                              }}
+                              title={`View full image ${i + 1}`}
+                            >
+                              <img
+                                src={url}
+                                alt={`Reference for ${selectedQuestion.title} ${i + 1}`}
+                                style={{
+                                  width: "100%",
+                                  height: "auto",
+                                  maxHeight: "300px",
+                                  objectFit: "contain",
+                                  display: "block",
+                                }}
+                              />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
 
               <div className="question-browser__section">
                 <div className="question-browser__label">
