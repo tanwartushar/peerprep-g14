@@ -36,6 +36,58 @@ export const Dashboard: React.FC = () => {
   const dashboardTheme = "user";
 
   useEffect(() => {
+    if (isLoading || !userId) return;
+    let mounted = true;
+
+    const checkActiveSession = async () => {
+      try {
+        const res = await fetch('/api/collaboration/sessions/active', {
+          credentials: 'include'
+        });
+        if (res.ok && res.status !== 204 && mounted) {
+          const session = await res.json();
+          // Timeout validation: Alert user if they were timed out and we haven't shown it yet.
+          if (session.status === "terminated") {
+            if (session.terminateReason === "Timeout" && session.terminatedBy === userId) {
+               const shownKey = `notified_timeout_${session.id}`;
+               if (!sessionStorage.getItem(shownKey)) {
+                   alert("Your login exceeded the time limit, your previous session has ended");
+                   sessionStorage.setItem(shownKey, "true");
+               }
+            }
+            return;
+          }
+          // Only resume an actually active session (terminated rows must not trap users in a WS loop).
+          if (session.status !== "active") {
+            return;
+          }
+          // Extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
+          const part1 = session.id.slice(0, 36);
+          const part2 = session.id.slice(37);
+          const effId = getEffectiveMatchingUserId(userId);
+          const isUser1 = session.user1Id === (effId || userId);
+
+          navigate('/workspace', {
+            state: {
+              requestId: part1,
+              peerMatchRequestId: part2,
+              programmingLanguage: session.language,
+              peerUserId: isUser1 ? session.user2Id : session.user1Id,
+              difficulty: '',
+              topic: ''
+            }
+          });
+        }
+      } catch (e) {
+        // ignore errors, let dashboard render normally
+      }
+    };
+
+    void checkActiveSession();
+    return () => { mounted = false; };
+  }, [userId, isLoading, navigate]);
+
+  useEffect(() => {
     saveMatchFormDraft({
       topic,
       difficulty,
