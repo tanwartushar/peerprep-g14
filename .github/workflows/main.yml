@@ -5,8 +5,8 @@ on:
     branches: [ "main" ]
 
 env:
-  AWS_REGION: us-east-1                   # Change to your region
-  ECR_REPOSITORY: my-microservice-repo    # Your ECR repo name
+  AWS_REGION: ap-southeast-1                  # Change to your region
+  ECR_REPOSITORY: peerprep-g-14    # Your ECR repo name
   ECS_SERVICE: my-microservice-service    # Your ECS service name
   ECS_CLUSTER: my-microservice-cluster    # Your ECS cluster name
 
@@ -18,6 +18,8 @@ jobs:
   deploy:
     name: Build and Deploy
     runs-on: ubuntu-latest
+    environment: aws
+    
 
     steps:
     - name: Checkout Code
@@ -26,7 +28,7 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
-        role-to-assume: arn:aws:iam::123456789012:role/GitHubActionRole # Replace with your Role ARN
+        role-to-assume: ${{ secrets.arn }}"
         aws-region: ${{ env.AWS_REGION }}
 
     - name: Login to Amazon ECR
