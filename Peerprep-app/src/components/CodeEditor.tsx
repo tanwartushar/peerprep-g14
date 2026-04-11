@@ -5,7 +5,7 @@ import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
 import { useAuth } from '../context/AuthContext';
-import { getMonacoLang, configureMonaco } from './monacoSetup';
+import { getMonacoLang, configureMonaco, createCursorStyleUpdater } from './monacoSetup';
 
 interface CodeEditorProps {
     value: string;
@@ -193,12 +193,22 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
             provider.awareness
         );
 
+        // inject per-client cursor colour rules whenever awareness changes
+        const { update: updateCursorStyles, cleanup: cleanupCursorStyles } =
+            createCursorStyleUpdater(provider.awareness, ydoc.clientID);
+
+        provider.awareness.on('change', updateCursorStyles);
+        updateCursorStyles();
+
         type.observe(() => {
             onChange(type.toString());
         });
+
+        // remove injected style on cleanup
+        return () => { cleanupCursorStyles(); };
     };
 
-    // Reactively update the Monaco model language when the prop changes
+    // update the monaco model language when the prop changes
     useEffect(() => {
         if (!editorRef.current || !monacoRef.current) return;
         const model = editorRef.current.getModel();

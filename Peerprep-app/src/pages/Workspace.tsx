@@ -37,6 +37,22 @@ function formatMinutesLine(m: number | null | undefined): string {
   return `${m} min`;
 }
 
+function getFileExtension(language: string | undefined): string {
+  if (!language) return ".js"; // default
+
+  switch (language.toLowerCase()) {
+    case "python": return ".py";
+    case "java": return ".java";
+    case "c++":
+    case "cpp": return ".cpp";
+    case "c": return ".c";
+    case "go": return ".go";
+    case "typescript": return ".ts";
+    case "javascript": return ".js";
+    default: return ".txt";
+  }
+}
+
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -71,7 +87,6 @@ export const Workspace: React.FC = () => {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
-  const [peerName, setPeerName] = useState<string | null>(null);
   const sessionEndedRef = React.useRef(false);
 
   const endSessionOnce = React.useCallback(
@@ -86,15 +101,6 @@ export const Workspace: React.FC = () => {
     },
     [navigate],
   );
-
-  // Fetch peer display name
-  React.useEffect(() => {
-    if (!state?.peerUserId) return;
-    fetch(`/user/profile/${encodeURIComponent(state.peerUserId)}`, { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.name) setPeerName(data.name); })
-      .catch(() => {});
-  }, [state?.peerUserId]);
 
   React.useEffect(() => {
     if (!state?.requestId || !state?.peerMatchRequestId) {
@@ -309,7 +315,7 @@ export const Workspace: React.FC = () => {
             <div className={`status-indicator ${partnerOnline ? 'online' : 'offline'}`} style={{ backgroundColor: partnerOnline ? 'var(--success-color)' : 'var(--danger-color)' }}></div>
             <span className="text-sm text-secondary">
               {state?.peerUserId
-                ? `Peer: ${peerName ?? state.peerUserId}`
+                ? `Peer: ${state.peerUserId}`
                 : "Peer Connected"}
             </span>
           </div>
@@ -468,7 +474,7 @@ export const Workspace: React.FC = () => {
             <div className="editor-tabs">
               <button className="editor-tab active">
                 <Code2 className="h-4 w-4 mr-2" />
-                solution.js
+                solution{getFileExtension(state?.programmingLanguage)}
               </button>
             </div>
             <div className="editor-actions">
