@@ -21,7 +21,7 @@ export const Login: React.FC = () => {
   // This is for user login with github
   const handleLogin = () => {
     setIsLoading(true);
-    window.location.href = "http://localhost/user/auth/github";
+    window.location.href = "/user/auth/github";
   };
 
   // This is for admin login only. The code is WRONG.
@@ -30,7 +30,7 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     // Determine which endpoint to call
-    const endpoint = "http://localhost/user/admin/login";
+    const endpoint = "/user/admin/login";
 
     try {
       const response = await fetch(endpoint, {

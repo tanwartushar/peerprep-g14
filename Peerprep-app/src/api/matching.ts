@@ -11,7 +11,7 @@ export function getMatchingServiceBaseUrl(): string {
   if (import.meta.env.DEV) {
     return "";
   }
-  return "http://localhost:3003";
+  return "";
 }
 
 function matchingFetchInit(

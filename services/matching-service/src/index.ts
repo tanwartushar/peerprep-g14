@@ -10,6 +10,8 @@ const PORT = Number.parseInt(process.env.PORT ?? "3003", 10);
 const defaultOrigins = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  // Add your exact ALB DNS name here:
+  "http://peerprep-1486465808.ap-southeast-1.elb.amazonaws.com"
 ] as const;
 const extra = process.env.FRONTEND_ORIGIN?.trim();
 const allowList = extra
