@@ -15,7 +15,7 @@ export const fetchQuestions = async () => {
     return data.map((q: any) => ({ 
         ...q, id: q._id,
         topics: q.topics ?? [],
-        imageUrls: q.imageUrls ?? []
+        // imageUrls: q.imageUrls ?? []
      })); 
 };
 

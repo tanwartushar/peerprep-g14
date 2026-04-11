@@ -14,6 +14,7 @@ import (
 	"github.com/tgonet/peerprep-g14/services/question-service/question/validation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"github.com/sony/gobreaker"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
 	// "golang.org/x/text/cases"
 )
@@ -63,6 +64,42 @@ type CreateQuestionParams struct {
 	ImageUrls   []string `json:"imageUrls"`
 }
 
+var FallbackQuestions = []Question{
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Two Sum",
+		Description:    "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution.",
+		Constraint:     "2 <= nums.length <= 10^4, -10^9 <= nums[i] <= 10^9, -10^9 <= target <= 10^9",
+		ExpectedOutput: "[0, 1]",
+		Difficulty:     "Easy",
+		Topics:         []string{"Array", "Hash Table"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Reverse String",
+		Description:    "Write a function that reverses a string. The input string is given as an array of characters s. You must do this by modifying the input array in-place with O(1) extra memory.",
+		Constraint:     "1 <= s.length <= 10^5, s[i] is a printable ascii character.",
+		ExpectedOutput: "[\"o\",\"l\",\"l\",\"e\",\"h\"]",
+		Difficulty:     "Easy",
+		Topics:         []string{"Two Pointers", "String"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Valid Anagram",
+		Description:    "Given two strings s and t, return true if t is an anagram of s, and false otherwise. An Anagram is a word or phrase formed by rearranging the letters of a different word or phrase.",
+		Constraint:     "1 <= s.length, t.length <= 5 * 10^4, s and t consist of lowercase English letters.",
+		ExpectedOutput: "true",
+		Difficulty:     "Easy",
+		Topics:         []string{"Hash Table", "String", "Sorting"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
+}
+
 func initQuestion() Question{
 	var quest_struct Question
 	quest_struct.Title = ""
@@ -74,6 +111,17 @@ func initQuestion() Question{
 	quest_struct.CreatedAt = ""
 	quest_struct.ImageUrls = []string{}
 	return quest_struct
+}
+
+var cb *gobreaker.CircuitBreaker
+
+func init() {
+	cb = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "DB-Questions",
+		MaxRequests: 3,
+		Interval:    5 * time.Second,
+		Timeout:     30 * time.Second,
+	})
 }
 
 // func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
@@ -132,13 +180,14 @@ func (q *QuestionService) GetQuestions(difficulty string, topic string, client *
 
 	cursor, err := questionColl.Find(context.TODO(), filter)
 	if err != nil {
-		return nil, err
+		return FallbackQuestions, nil
 	}
+
 	defer cursor.Close(context.TODO())
 
 	var questions []Question // initialize as nil slice, Find will append
 	if err = cursor.All(context.TODO(), &questions); err != nil {
-		return nil, err
+		return FallbackQuestions, nil
 	}
 
 	if questions == nil {
