@@ -57,6 +57,7 @@ jobs:
           ./${{ matrix.folder }}
         
         docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
     - name: Update ECS Service
       run: |
