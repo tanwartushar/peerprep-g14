@@ -101,7 +101,7 @@ app.post('/api/auth/logout', async (req: any, res: any) => {
 });
 
 app.get('/health', async (req: any, res: any) => {
-  return res.status(200);
+  return res.status(200).send('OK');
 });
 
 // New endpoint for frontend to verify session validity

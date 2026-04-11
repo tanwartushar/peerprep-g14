@@ -29,7 +29,7 @@ app.use(adminRouter);
 app.use(authRouter);
 
 app.get('/health', async (req: any, res: any) => {
-  return res.status(200);
+  return res.status(200).send('OK');
 });
 
 app.listen(PORT, () => {

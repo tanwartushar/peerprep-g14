@@ -34,7 +34,7 @@ const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 app.get('/health', async (req: any, res: any) => {
-  return res.status(200);
+  return res.status(200).send('OK');
 });
 
 setPersistence({
