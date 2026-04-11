@@ -44,14 +44,15 @@ const (
 
 type Question struct {
 	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title       string   `json:"title" bson:"Title"`
-	Description string   `json:"description" bson:"Description"`
-	Constraint string   `json:"constraint" bson:"Constraint"`
-	ExpectedOutput string   `json:"expectedOutput" bson:"ExpectedOutput"`
-	Difficulty  string   `json:"difficulty" bson:"Difficulty"`
-	Topics      []string `json:"topics" bson:"Topics"`
-	CreatedAt   string   `json:"createdAt" bson:"CreatedAt"`
-	ImageUrls   []string `json:"imageUrls" bson:"ImageUrls"`
+	Title       string   		`json:"title" bson:"Title"`
+	Description string   		`json:"description" bson:"Description"`
+	Constraint string   		`json:"constraint" bson:"Constraint"`
+	ExpectedOutput string   	`json:"expectedOutput" bson:"ExpectedOutput"`
+	Difficulty  string   		`json:"difficulty" bson:"Difficulty"`
+	Topics      []string 		`json:"topics" bson:"Topics"`
+	CreatedAt   string   		`json:"createdAt" bson:"CreatedAt"`
+	ImageUrls   []string 		`json:"imageUrls" bson:"ImageUrls"`
+	Matched 	int				`json:"matched" bson:"Matched"`
 }
 
 type CreateQuestionParams struct {
@@ -149,6 +150,7 @@ func (q *QuestionService) CreateQuestion(req CreateQuestionParams, client *mongo
 	doc.Topics = validatedTopics
 	doc.ImageUrls = req.ImageUrls
 	doc.CreatedAt = time.Now().Format(time.DateTime)
+	doc.Matched = 0
 	
 	fmt.Printf("Inserting: \n")
 	fmt.Printf("Title: %s\n", doc.Title)
@@ -217,7 +219,7 @@ func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Que
 	return &result, nil
 }
 
-func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, imageUrls []string, client *mongo.Client) error {
+func (q *QuestionService) UpdateQuestion(id string, params Question, client *mongo.Client) error {
 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
@@ -226,23 +228,25 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 	}
 
 	topicstore := validation.NewTopicStore()
-	validatedLevel, err := validation.ValidateDifficulty(diff)
+	validatedLevel, err := validation.ValidateDifficulty(params.Difficulty)
 	if err != nil {
 		return err
 	}
 
-	validatedTopics, err := validation.ValidateTopics(topics, topicstore)
+	validatedTopics, err := validation.ValidateTopics(params.Topics, topicstore)
 	if err != nil {
 		return err
 	}
 
 	update := bson.M{
 		"$set": bson.M{
-			"Title":       *title,
-			"Description": *desc,
-			"Difficulty":  validatedLevel,
-			"Topics":      validatedTopics,
-			"ImageUrls":   imageUrls,
+			"Title":       		params.Title,
+			"Description": 		params.Description,
+			"Difficulty":  		validatedLevel,
+			"Topics":      		validatedTopics,
+			"Constraint":  		params.Constraint,
+			"ExpectedOutput":  	params.ExpectedOutput,
+			"ImageUrls":   		params.ImageUrls,
 		},
 	}
 
@@ -291,3 +295,10 @@ func (q *QuestionService) QueryAllQuestions(client *mongo.Client) ([]Question, e
 	}
 	return questionList, nil
 }
+
+// func (q *QuestionService) QueryTop5MatchedQuestions(client *mongo.Client) ([]Question, error) {
+// 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+// 	var top5_question []Question
+
+// 	cursor, err := questionColl.Find(context.TODO(), bson)
+// }
