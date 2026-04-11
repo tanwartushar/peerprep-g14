@@ -50,12 +50,14 @@ jobs:
         REPO_NAME: peerprep-g-14-${{ matrix.service_name }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Use the folder from the matrix to find the Dockerfile
+        # Build the container and give it TWO tags at once
         docker build \
           -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$REPO_NAME:latest \
           -f ./${{ matrix.folder }}/Dockerfile.prod \
           ./${{ matrix.folder }}
         
+        # Now both tags exist locally and can be pushed
         docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
         docker push $ECR_REGISTRY/$REPO_NAME:latest
 
