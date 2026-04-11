@@ -71,6 +71,7 @@ export const Workspace: React.FC = () => {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
+  const [peerName, setPeerName] = useState<string | null>(null);
   const sessionEndedRef = React.useRef(false);
 
   const endSessionOnce = React.useCallback(
@@ -85,6 +86,15 @@ export const Workspace: React.FC = () => {
     },
     [navigate],
   );
+
+  // Fetch peer display name
+  React.useEffect(() => {
+    if (!state?.peerUserId) return;
+    fetch(`/user/profile/${encodeURIComponent(state.peerUserId)}`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.name) setPeerName(data.name); })
+      .catch(() => {});
+  }, [state?.peerUserId]);
 
   React.useEffect(() => {
     if (!state?.requestId || !state?.peerMatchRequestId) {
@@ -299,7 +309,7 @@ export const Workspace: React.FC = () => {
             <div className={`status-indicator ${partnerOnline ? 'online' : 'offline'}`} style={{ backgroundColor: partnerOnline ? 'var(--success-color)' : 'var(--danger-color)' }}></div>
             <span className="text-sm text-secondary">
               {state?.peerUserId
-                ? `Peer: ${state.peerUserId}`
+                ? `Peer: ${peerName ?? state.peerUserId}`
                 : "Peer Connected"}
             </span>
           </div>
@@ -487,6 +497,7 @@ export const Workspace: React.FC = () => {
               <CodeEditor
                 value={code}
                 onChange={(val) => setCode(val || "")}
+                language={state?.programmingLanguage || 'javascript'}
                 currentUser={currentUser}
                 sessionId={sessionId}
                 onSystemTerminate={handleSystemTerminate}
@@ -517,7 +528,7 @@ export const Workspace: React.FC = () => {
       {showDisconnectModal && !partnerOnline && !hasSessionEnded && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
           <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#111' }}>Partner Disconnected!</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Peer Disconnected!</h2>
             <p style={{ marginBottom: '1.5rem', color: '#444' }}>
               Your peer got disconnected. This session will be closed in 2 minutes to free up resources.<br /><br />
               You can either Wait for them to reconnect, or end this session and Return to your Dashboard.

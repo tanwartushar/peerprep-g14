@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import * as Y from 'yjs';
 // @ts-ignore
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
 import { useAuth } from '../context/AuthContext';
+import { getMonacoLang, configureMonaco } from './monacoSetup';
 
 interface CodeEditorProps {
     value: string;
@@ -25,6 +26,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
     const bindingRef = useRef<MonacoBinding | null>(null);
     const ydocRef = useRef<Y.Doc | null>(null);
     const partnerOfflineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const monacoRef = useRef<any>(null);
+    const monacoLang = getMonacoLang(language);
+
+    const handleBeforeMount: BeforeMount = (monaco) => {
+        monacoRef.current = monaco;
+        configureMonaco(monaco);
+    };
 
     const handleEditorDidMount: OnMount = (editor) => {
         editorRef.current = editor;
@@ -158,14 +166,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
             }
         });
 
-        // One-time check after WebSocket sync: if we reconnect and partner is already gone,
-        // no 'change' event fires so we do an explicit check here.
+        // one-time check after WebSocket sync: if user reconnects and peer is already gone
         const onFirstSync = (synced: boolean) => {
             if (!synced || !onPartnerPresenceChange || didEmitTermination) return;
             provider.off('sync', onFirstSync);
             const states = provider.awareness.getStates();
             if (states.size <= 1) {
-                // We are alone — show the disconnect modal right away
+                // user is alone — show the disconnect modal right away
                 onPartnerPresenceChange(false);
             }
         };
@@ -191,6 +198,13 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
         });
     };
 
+    // Reactively update the Monaco model language when the prop changes
+    useEffect(() => {
+        if (!editorRef.current || !monacoRef.current) return;
+        const model = editorRef.current.getModel();
+        if (model) monacoRef.current.editor.setModelLanguage(model, monacoLang);
+    }, [monacoLang]);
+
     useEffect(() => {
         return () => {
             if (partnerOfflineTimerRef.current) {
@@ -207,8 +221,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
         <div style={{ height: '100%', width: '100%' }}>
             <Editor
                 height="100%"
-                defaultLanguage={language}
+                defaultLanguage={monacoLang}
+                language={monacoLang}
                 theme="vs-dark"
+                beforeMount={handleBeforeMount}
                 onMount={handleEditorDidMount}
                 options={{
                     minimap: { enabled: false },
@@ -216,7 +232,10 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
                     wordWrap: 'on',
                     lineNumbersMinChars: 3,
                     scrollBeyondLastLine: false,
-                    padding: { top: 16 }
+                    padding: { top: 16 },
+                    quickSuggestions: true,
+                    suggestOnTriggerCharacters: true,
+                    tabCompletion: 'on',
                 }}
             />
         </div>
