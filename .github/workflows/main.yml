@@ -106,7 +106,7 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         # Use the folder from the matrix to find the Dockerfile
-        docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG ./${{ matrix.folder }}
+        docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG -f ./${{ matrix.folder }}/Dockerfile.prod ./${{ matrix.folder }}
         docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
 
     - name: Update ECS Service
