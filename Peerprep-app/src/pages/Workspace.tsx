@@ -114,10 +114,7 @@ export const Workspace: React.FC = () => {
           if (sessionData.status === "terminated") {
             if (mounted) {
               setIsSessionLoading(false);
-              endSessionOnce(
-                sessionData.terminateReason ||
-                "This session has ended. Returning to Dashboard.",
-              );
+              endSessionOnce("This session has ended. Returning to Dashboard.");
             }
             return;
           }
@@ -215,10 +212,7 @@ export const Workspace: React.FC = () => {
         if (res.ok) {
           const data = await res.json();
           if (data.status === "terminated") {
-            endSessionOnce(
-              data.terminateReason ||
-              "This session has ended. Returning to Dashboard.",
-            );
+            endSessionOnce("This session has ended. Returning to Dashboard.");
           }
           return;
         }
@@ -251,8 +245,14 @@ export const Workspace: React.FC = () => {
     }
   };
 
-  const handleSystemTerminate = (reason: string) => {
+  const handleSystemTerminate = async (reason: string) => {
     if (sessionEndedRef.current) return;
+    try {
+      await fetch(`/api/collaboration/sessions/${sessionId}/terminate`, {
+        method: 'PATCH',
+        credentials: 'include'
+      });
+    } catch (e) { }
     endSessionOnce(reason);
   };
 

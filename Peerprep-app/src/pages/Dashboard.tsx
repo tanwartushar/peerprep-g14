@@ -46,22 +46,25 @@ export const Dashboard: React.FC = () => {
         });
         if (res.ok && res.status !== 204 && mounted) {
           const session = await res.json();
-          // Timeout validation: Alert user if they were timed out and we haven't shown it yet.
+          // termination validation: alert offline returning users
           if (session.status === "terminated") {
-            if (session.terminateReason === "Timeout" && session.terminatedBy === userId) {
-               const shownKey = `notified_timeout_${session.id}`;
-               if (!sessionStorage.getItem(shownKey)) {
-                   alert("Your login exceeded the time limit, your previous session has ended");
-                   sessionStorage.setItem(shownKey, "true");
-               }
+            const shownKey = `notified_termination_${session.id}`;
+            if (!sessionStorage.getItem(shownKey)) {
+              // Rely on terminatedBy rather than terminateReason since the DB
+              // always stores 'Deliberate' due to Docker build cache on local services.
+              // If the terminator is someone else, this user was offline.
+              if (session.terminatedBy !== userId && session.terminatedBy !== 'anonymous') {
+                alert("Your previous session has ended. You can find a new match from the Dashboard.");
+              }
+              sessionStorage.setItem(shownKey, "true");
             }
             return;
           }
-          // Only resume an actually active session (terminated rows must not trap users in a WS loop).
+          // only resume an actually active session (terminated rows must not trap users in a WS loop)
           if (session.status !== "active") {
             return;
           }
-          // Extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
+          // extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
           const part1 = session.id.slice(0, 36);
           const part2 = session.id.slice(37);
           const effId = getEffectiveMatchingUserId(userId);
@@ -79,7 +82,7 @@ export const Dashboard: React.FC = () => {
           });
         }
       } catch (e) {
-        // ignore errors, let dashboard render normally
+        // dashboard renders normally
       }
     };
 

@@ -4,6 +4,7 @@ import * as Y from 'yjs';
 // @ts-ignore
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
+import { useAuth } from '../context/AuthContext';
 
 interface CodeEditorProps {
     value: string;
@@ -18,6 +19,7 @@ interface CodeEditorProps {
 const PEER_ENDED_MSG = 'This Session has been ended by a peer. Returning to Dashboard.';
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange }) => {
+    const { userId } = useAuth();
     const editorRef = useRef<any>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
     const bindingRef = useRef<MonacoBinding | null>(null);
@@ -34,7 +36,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
                 clearTimeout(partnerOfflineTimerRef.current);
                 partnerOfflineTimerRef.current = null;
             }
-            // y-websocket reconnects forever unless shouldConnect is cleared
+
             try {
                 provider.disconnect();
             } catch {
@@ -56,7 +58,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
         // const wsUrl = 'ws://localhost/api/collaboration/ws'; 
         const wsUrl = 'https://backend-server-kppd.onrender.com/api/collaboration/ws';
 
-        const provider = new WebsocketProvider(wsUrl, sessionId, ydoc);
+        const provider = new WebsocketProvider(wsUrl, sessionId, ydoc, {
+            params: { userId: userId || 'anonymous' }
+        });
         providerRef.current = provider;
 
         if (currentUser) {
@@ -128,7 +132,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
                         }
                     }
                 } catch {
-                    // fall through: consider accidental disconnect if still solo
+                    // ignore network errors
                 }
 
                 if (didEmitTermination) return;
@@ -153,6 +157,19 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
                 maybeReportPartnerOfflineAfterDebounce();
             }
         });
+
+        // One-time check after WebSocket sync: if we reconnect and partner is already gone,
+        // no 'change' event fires so we do an explicit check here.
+        const onFirstSync = (synced: boolean) => {
+            if (!synced || !onPartnerPresenceChange || didEmitTermination) return;
+            provider.off('sync', onFirstSync);
+            const states = provider.awareness.getStates();
+            if (states.size <= 1) {
+                // We are alone — show the disconnect modal right away
+                onPartnerPresenceChange(false);
+            }
+        };
+        provider.on('sync', onFirstSync);
 
         provider.on('connection-close', (event: CloseEvent) => {
             if (event?.code === 4000) {

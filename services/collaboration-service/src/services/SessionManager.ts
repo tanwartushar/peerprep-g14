@@ -20,7 +20,7 @@ interface ActiveSessionData {
   inactivityTimeout?: NodeJS.Timeout | undefined;
   cleanup?: (() => void) | undefined;
   ydoc: any;
-  /** Set while deliberate/system termination is in progress (before sockets are closed). */
+  // set while deliberate/system termination is in progress (before sockets are closed)
   terminating?: boolean;
 }
 
@@ -40,13 +40,12 @@ export class SessionManager {
 
     if (!activeSessions.has(docName)) {
       activeSessions.set(docName, { connections: new Set(), userMap: new Map(), ydoc });
-      
+
       const sessionData = activeSessions.get(docName)!;
 
       const debouncedSave = debounce(async () => {
         const state = SessionManager.Yjs.encodeStateAsUpdate(ydoc);
         try {
-          // Because we securely create the session on match via POST /sessions, it exists!
           await SessionManager.prisma.session.update({
             where: { id: docName },
             data: { docState: Buffer.from(state) }
@@ -73,8 +72,8 @@ export class SessionManager {
     sessionData.connections.add(ws);
     sessionData.userMap.set(ws, userId);
 
-    // If a user connects, clear any ongoing disconnection grace period!
-    if (sessionData.gracePeriodTimeout) {
+    // if a user connects, clear any ongoing disconnection grace period only if room is full
+    if (sessionData.gracePeriodTimeout && sessionData.connections.size >= 2) {
       clearTimeout(sessionData.gracePeriodTimeout);
       sessionData.gracePeriodTimeout = undefined;
       console.log(`[SessionManager] ${docName}: Grace period cleared, user rejoined.`);
@@ -86,7 +85,7 @@ export class SessionManager {
       sessionData.userMap.delete(ws);
       console.log(`[SessionManager] ${docName}: Client disconnected. Remaining: ${sessionData.connections.size}`);
 
-      // Do not start accidental-disconnect grace while a deliberate terminate is flushing/closing sockets.
+      // do not start accidental-disconnect grace while a deliberate terminate is closing sockets
       if (sessionData.terminating) {
         return;
       }
@@ -123,52 +122,58 @@ export class SessionManager {
     if (sessionData) {
       sessionData.terminating = true;
       if (sessionData.gracePeriodTimeout) {
-         clearTimeout(sessionData.gracePeriodTimeout);
-         sessionData.gracePeriodTimeout = undefined;
+        clearTimeout(sessionData.gracePeriodTimeout);
+        sessionData.gracePeriodTimeout = undefined;
       }
       if (sessionData.inactivityTimeout) {
-         clearTimeout(sessionData.inactivityTimeout);
-         sessionData.inactivityTimeout = undefined;
+        clearTimeout(sessionData.inactivityTimeout);
+        sessionData.inactivityTimeout = undefined;
       }
       if (sessionData.cleanup) sessionData.cleanup();
 
-      // Broadcast termination CRDT signal directly to clients
+      // broadcast termination CRDT signal directly to clients
       sessionData.ydoc.getMap('sys').set('status', 'terminated');
       sessionData.ydoc.getMap('sys').set('reason', reason);
       sessionData.ydoc.getMap('sys').set('terminateReason', terminationReason || 'Unknown');
+    }
 
-      // Forcefully persist document update immediately before dropping connections
+    // 1. Force the database status to terminated FIRST. Native SQL completely bypasses any out-of-sync Prisma bindings!
+    try {
+      await SessionManager.prisma.$executeRaw`
+        UPDATE "Session" 
+        SET "status" = 'terminated', 
+            "terminateReason" = ${terminationReason || 'Unknown'},
+            "terminatedBy" = ${terminatedBy || null}
+        WHERE "id" = ${docName}
+      `;
+    } catch (e) {
+      console.error(`[SessionManager] Raw SQL status update failed. Emitting deepest fallback for ${docName}.`, e);
       try {
-         const state = SessionManager.Yjs.encodeStateAsUpdate(sessionData.ydoc);
-         await SessionManager.prisma.session.update({
-            where: { id: docName },
-            data: { docState: Buffer.from(state) }
-         });
+        await SessionManager.prisma.$executeRaw`UPDATE "Session" SET "status" = 'terminated' WHERE "id" = ${docName}`;
+      } catch (e2) {
+        console.error(`[SessionManager] FATAL fallback SQL status update failed!`, e2);
+      }
+    }
+
+    if (sessionData) {
+      // 2. Persist the final document CRDT buffer securely immediately after lock
+      try {
+        const state = SessionManager.Yjs.encodeStateAsUpdate(sessionData.ydoc);
+        await SessionManager.prisma.session.update({
+          where: { id: docName },
+          data: { docState: Buffer.from(state) }
+        });
       } catch (e) {
-         console.error(`[SessionManager] Flush DB save failed for ${docName}:`, e);
+        console.error(`[SessionManager] Flush DB save failed for ${docName}:`, e);
       }
 
-      // Critical: Wait 1000ms to allow TCP flush to transmit the map updates to clients!
+      // wait 1000ms to allow TCP flush to transmit the map updates to actively connected clients
       setTimeout(() => {
         for (const socket of sessionData.connections) {
-          socket.close(4000, reason); 
+          socket.close(4000, reason);
         }
         activeSessions.delete(docName);
       }, 1000);
-    }
-
-    try {
-      await SessionManager.prisma.session.update({
-        where: { id: docName },
-        data: {
-          status: 'terminated',
-          terminatedAt: new Date(),
-          terminateReason: terminationReason || 'Unknown',
-          terminatedBy: terminatedBy || null,
-        },
-      });
-    } catch (e) {
-      console.error(`[SessionManager] Failed to update DB status for ${docName}`, e);
     }
   }
 }
