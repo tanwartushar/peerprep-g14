@@ -1,58 +1,3 @@
-# name: Deploy to Amazon ECS
-
-# on:
-#   push:
-#     branches: [ "main" ]
-
-# env:
-#   AWS_REGION: ap-southeast-1                  # Change to your region
-#   ECR_REPOSITORY: peerprep-g-14    # Your ECR repo name
-#   ECS_SERVICE: peerpre-g-14    # Your ECS service name
-#   ECS_CLUSTER: peerpre-g-14    # Your ECS cluster name
-
-# permissions:
-#   id-token: write # Required for requesting the JWT (OIDC)
-#   contents: read  # Required for actions/checkout
-
-# jobs:
-#   deploy:
-#     name: Build and Deploy
-#     runs-on: ubuntu-latest
-#     environment: aws
-    
-
-#     steps:
-#     - name: Checkout Code
-#       uses: actions/checkout@v4
-
-#     - name: Configure AWS credentials
-#       uses: aws-actions/configure-aws-credentials@v4
-#       with:
-#         role-to-assume: ${{ secrets.arn }}
-#         aws-region: ${{ env.AWS_REGION }}
-
-#     - name: Login to Amazon ECR
-#       id: login-ecr
-#       uses: aws-actions/amazon-ecr-login@v2
-
-#     - name: Build, tag, and push image to Amazon ECR
-#       id: build-image
-#       env:
-#         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-#         IMAGE_TAG: ${{ github.sha }}
-#       run: |
-#         # Build the docker container
-#         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-#         # Push it to ECR
-#         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-#         # Output the image name so we can use it later
-#         echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-#     - name: Deploy to Amazon ECS
-#       run: |
-#         # This command tells ECS to pull the latest image and restart tasks
-#         aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} \
-
 name: Deploy Peerprep Microservices
 
 on:
@@ -102,16 +47,20 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         # Note: You should create 6 ECR repos named e.g. peerprep-auth-service
-        REPO_NAME: peerprep-${{ matrix.service_name }}
+        REPO_NAME: peerprep-g-14-${{ matrix.service_name }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
         # Use the folder from the matrix to find the Dockerfile
-        docker build -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG -f ./${{ matrix.folder }}/Dockerfile.prod ./${{ matrix.folder }}
+        docker build \
+          -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG \
+          -f ./${{ matrix.folder }}/Dockerfile.prod \
+          ./${{ matrix.folder }}
+        
         docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
 
     - name: Update ECS Service
       run: |
         # Use matrix.service_name to target the specific service for THIS loop
-        aws ecs update-service --cluster peerprep-cluster \
+        aws ecs update-service --cluster peerpre-g-14 \
                                --service ${{ matrix.service_name }} \
                                --force-new-deployment
