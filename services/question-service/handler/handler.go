@@ -12,27 +12,19 @@ import (
 	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
 	"github.com/tgonet/peerprep-g14/services/question-service/question/repository"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	// "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 	// "go.mongodb.org/mongo-driver/v2/mongo/options"
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
 	DB *mongo.Client
-	// Cache *redis.Client
+	Cache *redis.Client
     QuestSvc *repository.QuestionService
 }
 
 
 func (h *Handler) PostCreateQuestionRequest(c *gin.Context) {
-	// var questDoc struct {
-    //     Title   string `json:"title"`
-    //     Description string `json:"description"`
-    //     Difficulty string `json:"difficulty"`
-    //     Topics []string `json:"topics"`
-    //     ImageUrls []string `json:"imageUrls"`
-    // }
-
 	var params repository.CreateQuestionParams
 
 	// Bind JSON from the UI request
@@ -84,30 +76,15 @@ func (h *Handler) GetQuestionByIDRequest(c *gin.Context) {
 }
 
 func (h *Handler) PutQuestionRequest(c *gin.Context) {
+	var params repository.Question
 	id := c.Param("id")
 
-	var questDoc struct {
-		Title       string   `json:"title"`
-		Description string   `json:"description"`
-		Difficulty  string   `json:"difficulty"`
-		Topics      []string `json:"topics"`
-		ImageUrls []string `json:"imageUrls"`
-	}
-
-	if err := c.ShouldBindJSON(&questDoc); err != nil {
+	if err := c.ShouldBindJSON(&params); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request payload"})
 		return
 	}
 
-	err := h.QuestSvc.UpdateQuestion(
-		id,
-		&questDoc.Title,
-		&questDoc.Description,
-		questDoc.Difficulty,
-		questDoc.Topics,
-		questDoc.ImageUrls,
-		h.DB,
-	)
+	err := h.QuestSvc.UpdateQuestion(id, params, h.DB)
 
 	if err != nil {
 		if err.Error() == "invalid ID format" || err.Error() == "question not found" {

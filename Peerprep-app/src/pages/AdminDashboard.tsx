@@ -27,9 +27,12 @@ interface Question {
   id: string;
   title: string;
   topics: string[];
+  constraint: string,
+  expectedOutput: string,
   difficulty: "easy" | "medium" | "hard";
   description?: string;
   imageUrls: string[];
+  matched: number;
 }
 
 const availabelTopics = [
@@ -66,8 +69,11 @@ export const AdminDashboard: React.FC = () => {
     title: "",
     topics: [],
     difficulty: "easy",
+    constraint: "",
+    expectedOutput: "",
     description: "",
     imageUrls: [],
+    matched: 0,
   });
   const [questionToDelete, setQuestionToDelete] = useState<Question | null>(
     null,
@@ -108,8 +114,11 @@ export const AdminDashboard: React.FC = () => {
       title: "",
       topics: [],
       difficulty: "easy",
+      constraint: "",
+      expectedOutput: "",
       description: "",
       imageUrls: [],
+      matched: 0,
     });
     setIsFormModalOpen(true);
   };
@@ -121,8 +130,11 @@ export const AdminDashboard: React.FC = () => {
       title: q.title,
       topics: [...q.topics],
       difficulty: q.difficulty,
+      constraint: q.constraint,
+      expectedOutput: q.expectedOutput,
       description: q.description || "",
       imageUrls: q.imageUrls || [],
+      matched: q.matched || 0,
     });
     setIsFormModalOpen(true);
   };
@@ -268,6 +280,8 @@ export const AdminDashboard: React.FC = () => {
               title: question.title,
               topics: question.topics,
               difficulty: question.difficulty,
+              constraint: question.constraint,
+              expectedOutput: question.expectedOutput,
               description: question.description,
               imageUrls: question.imageUrls,
               attempts: 0,

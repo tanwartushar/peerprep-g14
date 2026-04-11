@@ -18,7 +18,7 @@ export interface QuestionBrowserItem {
   constraint?: string;
   expectedOutput?: string;
   imageUrls?: string[];
-  attempts?: number;
+  matched?: number;
 }
 
 interface QuestionBrowserProps {
@@ -315,7 +315,7 @@ const QuestionBrowser: React.FC<QuestionBrowserProps> = ({
                   Number of Attempts
                 </div>
                 <div className="question-browser__value">
-                  {selectedQuestion.attempts ?? 0}
+                  {selectedQuestion.matched ?? 0}
                 </div>
               </div>
             </div>

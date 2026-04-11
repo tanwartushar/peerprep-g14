@@ -5,10 +5,16 @@ const getHeaders = () => ({
 });
 
 export const fetchQuestions = async () => {
+    const startTime = performance.now();
+    
     const response = await fetch(`${API_BASE_URL}/`, {
         method: 'GET',
         credentials: 'include' ,
     });
+
+    const endTime = performance.now(); // End timer
+    console.log(`Response time: ${(endTime - startTime).toFixed(2)} ms`);
+
     if (!response.ok) throw new Error('Failed to fetch questions');
     
     const data = await response.json();

@@ -22,6 +22,9 @@ build/
 npm-debug.log*
 yarn-error.log*
 
+# --- Go (Question Service) ---
+services/question-service/tmp
+
 # --- Environment Secrets ---
 # NEVER commit these
 .env
