@@ -61,6 +61,6 @@ jobs:
     - name: Update ECS Service
       run: |
         # Use matrix.service_name to target the specific service for THIS loop
-        aws ecs update-service --cluster peerprep-g-14 \
+        aws ecs update-service --cluster  peerpre-g-14 \
                                --service ${{ matrix.service_name }} \
                                --force-new-deployment
