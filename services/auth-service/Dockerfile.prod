@@ -25,9 +25,6 @@ RUN npm install --only=production
 # 3. Copy the COMPILED code from builder stage
 COPY --from=builder /usr/src/app/dist ./dist
 
-# 4. Copy the generated Prisma client 
-COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
-
 # Ensure environment is set to production
 ENV NODE_ENV=production
 
