@@ -8,9 +8,6 @@ RUN npm install
 
 COPY . .
 
-# 1. Generate Prisma Client (Crucial for Auth DB access)
-RUN npx prisma generate
-
 # 2. Compile TypeScript to JavaScript (Creates the 'dist' folder)
 RUN npm run build 
 
