@@ -10,7 +10,7 @@ RUN npm ci
 # Copy source and build the static files
 COPY . .
 # RUN npm run build
-RUN vite build
+RUN npx vite build
 
 # --- Stage 2: Production Stage (Nginx) ---
 FROM nginx:stable-alpine
