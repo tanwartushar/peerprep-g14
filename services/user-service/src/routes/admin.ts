@@ -129,7 +129,7 @@ router.patch("/admin/users/:id", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { name, bio, experienceLevel, learningPurpose } = req.body;
 
   try {
@@ -251,7 +251,7 @@ router.patch("/admin/admins/:id", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { name } = req.body;
 
   try {
