@@ -2,26 +2,37 @@
 FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 
-# Copy only the package files first (better caching)
 COPY package*.json ./
+# Install ALL dependencies (including typescript and prisma)
 RUN npm install
 
-# Copy the rest of your code
 COPY . .
 
-# If you use TypeScript, run your build command here
-# RUN npm run build 
+# 1. Generate Prisma Client (Crucial for Auth DB access)
+RUN npx prisma generate
 
-# Step 2: Runtime Stage (The "Slim" version)
+# 2. Compile TypeScript to JavaScript (Creates the 'dist' folder)
+RUN npm run build 
+
+# Step 2: Runtime Stage
 FROM node:20-alpine
 WORKDIR /usr/src/app
 
-# Only copy the production dependencies and built code
-COPY --from=builder /usr/src/app/package*.json ./
+# Only copy production-ready files
+COPY package*.json ./
 RUN npm install --only=production
-COPY --from=builder /usr/src/app ./
 
-# The port your Auth service listens on
+# 3. Copy the COMPILED code from builder stage
+COPY --from=builder /usr/src/app/dist ./dist
+
+# 4. Copy the generated Prisma client 
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+
+# Ensure environment is set to production
+ENV NODE_ENV=production
+
+# The port your Auth service listens on (Match this in ECS Task Definition)
 EXPOSE 3000
 
-CMD ["node", "src/index.js"]
+# 5. Run the compiled javascript
+CMD ["node", "dist/index.js"]
