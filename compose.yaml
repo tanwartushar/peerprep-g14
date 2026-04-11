@@ -25,7 +25,7 @@ services:
       - "3000:3000"
     build:
       context: ./services/auth-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -64,7 +64,7 @@ services:
       - "3001:3001"
     build:
       context: ./services/user-service # Path to your user service folder
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -94,7 +94,7 @@ services:
       - "3003:3003"
     build:
       context: ./services/matching-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/matching-service/.env
@@ -156,7 +156,7 @@ services:
       - ./services/collaboration-service/.env
     build:
       context: ./services/collaboration-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
