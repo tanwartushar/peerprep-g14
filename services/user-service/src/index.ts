@@ -28,6 +28,10 @@ app.use(userRouter);
 app.use(adminRouter);
 app.use(authRouter);
 
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200);
+});
+
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

@@ -100,6 +100,10 @@ app.post('/api/auth/logout', async (req: any, res: any) => {
   return res.status(200).json({ message: "Logged out successfully" });
 });
 
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200);
+});
+
 // New endpoint for frontend to verify session validity
 app.get('/api/auth/verify', verifyGateway, (req: any, res: any) => {
   // If we reach here, verifyGateway has already validated the token 
@@ -143,3 +147,6 @@ server.on('upgrade', (req: any, socket: any, head: any) => {
     socket.destroy();
   }
 });
+
+
+
