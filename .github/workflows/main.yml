@@ -66,6 +66,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: arn-aws
     strategy:
       # This matrix matches your ACTUAL folder names from the image
       matrix:
