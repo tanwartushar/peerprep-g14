@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthContextType {
     isAuthenticated: boolean;
@@ -17,6 +18,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [userRole, setUserRole] = useState<string | null>(null);
     const [userId, setUserId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const queryClient = useQueryClient();
 
     useEffect(() => {
         const verifySession = async () => {
@@ -71,12 +73,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsAuthenticated(false);
             setUserId(null);
             setUserRole(null);
+            queryClient.clear();
+            localStorage.clear();
         } catch (error) {
             console.error('Failed to clear cookies on logout:', error);
             // On failure, we should probably still log them out locally to prevent them from being stuck
             setIsAuthenticated(false);
             setUserId(null);
             setUserRole(null);
+            queryClient.clear();
+            localStorage.clear();
         }
     };
 
