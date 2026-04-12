@@ -123,7 +123,7 @@ services:
     platform: linux/amd64
     build:
       context: ./services/question-service
-      dockerfile: Dockerfile.dev      #use Dockerfile.prod for production
+      dockerfile: Dockerfile.prod      #use Dockerfile.prod for production
     depends_on:
       - auth-service # if it depends on auth
     restart: on-failure

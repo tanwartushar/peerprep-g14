@@ -17,7 +17,7 @@ func main() {
 	r := gin.Default()
 	port := ":3002"
 	mongoClient := database.ConnectMongo()
-	// redisClient := database.RedisConnect()
+	redisClient := database.RedisConnect()
 	// defer func() {
     //     if err := database.Client.Disconnect(context.Background()); err != nil {
     //         log.Fatalf("Error disconnecting from MongoDB: %v", err)
@@ -26,7 +26,7 @@ func main() {
 
 	h := handler.Handler{
 		DB: mongoClient,
-		// Cache: redisClient,
+		Cache: redisClient,
 		QuestSvc: &repository.QuestionService{},
 	}
 	// curl.exe -X GET http://localhost:3002/health

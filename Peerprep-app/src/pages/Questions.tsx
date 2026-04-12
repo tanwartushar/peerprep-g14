@@ -36,6 +36,7 @@ interface Question {
   constraint?: string;
   expectedOutput?: string;
   imageUrls: string[];
+  matched: number;
 }
 
 const availableTopics = [
@@ -74,6 +75,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     constraint: "",
     expectedOutput: "",
     imageUrls: [],
+    matched: 0
   });
 
   const getTopicLabel = (value: string) => {
@@ -86,6 +88,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       setIsLoading(true);
       const data = await fetchQuestions();
       setQuestions(data);
+      console.log(data)
     } catch (error) {
       console.error("Error loading questions:", error);
     } finally {
@@ -122,6 +125,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       constraint: "",
       expectedOutput: "",
       imageUrls: [],
+      matched: 0,
     });
     setIsFormModalOpen(true);
   };
@@ -137,6 +141,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       constraint: question.constraint || "",
       expectedOutput: question.expectedOutput || "",
       imageUrls: question.imageUrls || [],
+      matched: question.matched || 0,
     });
     setIsFormModalOpen(true);
   };

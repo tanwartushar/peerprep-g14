@@ -14,6 +14,7 @@ import (
 	"github.com/tgonet/peerprep-g14/services/question-service/question/validation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"github.com/sony/gobreaker"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
 	// "golang.org/x/text/cases"
 )
@@ -43,14 +44,15 @@ const (
 
 type Question struct {
 	ID          bson.ObjectID   `json:"_id,omitempty" bson:"_id,omitempty"`
-	Title       string   `json:"title" bson:"Title"`
-	Description string   `json:"description" bson:"Description"`
-	Constraint string   `json:"constraint" bson:"Constraint"`
-	ExpectedOutput string   `json:"expectedOutput" bson:"ExpectedOutput"`
-	Difficulty  string   `json:"difficulty" bson:"Difficulty"`
-	Topics      []string `json:"topics" bson:"Topics"`
-	CreatedAt   string   `json:"createdAt" bson:"CreatedAt"`
-	ImageUrls   []string `json:"imageUrls" bson:"ImageUrls"`
+	Title       string   		`json:"title" bson:"Title"`
+	Description string   		`json:"description" bson:"Description"`
+	Constraint string   		`json:"constraint" bson:"Constraint"`
+	ExpectedOutput string   	`json:"expectedOutput" bson:"ExpectedOutput"`
+	Difficulty  string   		`json:"difficulty" bson:"Difficulty"`
+	Topics      []string 		`json:"topics" bson:"Topics"`
+	CreatedAt   string   		`json:"createdAt" bson:"CreatedAt"`
+	ImageUrls   []string 		`json:"imageUrls" bson:"ImageUrls"`
+	Matched 	int				`json:"matched" bson:"Matched"`
 }
 
 type CreateQuestionParams struct {
@@ -61,6 +63,42 @@ type CreateQuestionParams struct {
 	Difficulty  string   `json:"difficulty"`
 	Topics      []string `json:"topics"`
 	ImageUrls   []string `json:"imageUrls"`
+}
+
+var FallbackQuestions = []Question{
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Two Sum",
+		Description:    "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution.",
+		Constraint:     "2 <= nums.length <= 10^4, -10^9 <= nums[i] <= 10^9, -10^9 <= target <= 10^9",
+		ExpectedOutput: "[0, 1]",
+		Difficulty:     "Easy",
+		Topics:         []string{"Array", "Hash Table"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Reverse String",
+		Description:    "Write a function that reverses a string. The input string is given as an array of characters s. You must do this by modifying the input array in-place with O(1) extra memory.",
+		Constraint:     "1 <= s.length <= 10^5, s[i] is a printable ascii character.",
+		ExpectedOutput: "[\"o\",\"l\",\"l\",\"e\",\"h\"]",
+		Difficulty:     "Easy",
+		Topics:         []string{"Two Pointers", "String"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
+	{
+		ID:             bson.NewObjectID(),
+		Title:          "Valid Anagram",
+		Description:    "Given two strings s and t, return true if t is an anagram of s, and false otherwise. An Anagram is a word or phrase formed by rearranging the letters of a different word or phrase.",
+		Constraint:     "1 <= s.length, t.length <= 5 * 10^4, s and t consist of lowercase English letters.",
+		ExpectedOutput: "true",
+		Difficulty:     "Easy",
+		Topics:         []string{"Hash Table", "String", "Sorting"},
+		CreatedAt:      time.Now().Format(time.RFC3339),
+		ImageUrls:      []string{},
+	},
 }
 
 func initQuestion() Question{
@@ -74,6 +112,17 @@ func initQuestion() Question{
 	quest_struct.CreatedAt = ""
 	quest_struct.ImageUrls = []string{}
 	return quest_struct
+}
+
+var cb *gobreaker.CircuitBreaker
+
+func init() {
+	cb = gobreaker.NewCircuitBreaker(gobreaker.Settings{
+		Name:        "DB-Questions",
+		MaxRequests: 3,
+		Interval:    5 * time.Second,
+		Timeout:     30 * time.Second,
+	})
 }
 
 // func (q *QuestionService) CreateQuestion(title *string, desc *string, diff string, topics []string, client *mongo.Client) (any, error) {
@@ -101,6 +150,7 @@ func (q *QuestionService) CreateQuestion(req CreateQuestionParams, client *mongo
 	doc.Topics = validatedTopics
 	doc.ImageUrls = req.ImageUrls
 	doc.CreatedAt = time.Now().Format(time.DateTime)
+	doc.Matched = 0
 	
 	fmt.Printf("Inserting: \n")
 	fmt.Printf("Title: %s\n", doc.Title)
@@ -132,13 +182,14 @@ func (q *QuestionService) GetQuestions(difficulty string, topic string, client *
 
 	cursor, err := questionColl.Find(context.TODO(), filter)
 	if err != nil {
-		return nil, err
+		return FallbackQuestions, nil
 	}
+
 	defer cursor.Close(context.TODO())
 
 	var questions []Question // initialize as nil slice, Find will append
 	if err = cursor.All(context.TODO(), &questions); err != nil {
-		return nil, err
+		return FallbackQuestions, nil
 	}
 
 	if questions == nil {
@@ -168,7 +219,7 @@ func (q *QuestionService) GetQuestionByID(id string, client *mongo.Client) (*Que
 	return &result, nil
 }
 
-func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string, diff string, topics []string, imageUrls []string, client *mongo.Client) error {
+func (q *QuestionService) UpdateQuestion(id string, params Question, client *mongo.Client) error {
 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
 
 	objID, err := bson.ObjectIDFromHex(id)
@@ -177,23 +228,25 @@ func (q *QuestionService) UpdateQuestion(id string, title *string, desc *string,
 	}
 
 	topicstore := validation.NewTopicStore()
-	validatedLevel, err := validation.ValidateDifficulty(diff)
+	validatedLevel, err := validation.ValidateDifficulty(params.Difficulty)
 	if err != nil {
 		return err
 	}
 
-	validatedTopics, err := validation.ValidateTopics(topics, topicstore)
+	validatedTopics, err := validation.ValidateTopics(params.Topics, topicstore)
 	if err != nil {
 		return err
 	}
 
 	update := bson.M{
 		"$set": bson.M{
-			"Title":       *title,
-			"Description": *desc,
-			"Difficulty":  validatedLevel,
-			"Topics":      validatedTopics,
-			"ImageUrls":   imageUrls,
+			"Title":       		params.Title,
+			"Description": 		params.Description,
+			"Difficulty":  		validatedLevel,
+			"Topics":      		validatedTopics,
+			"Constraint":  		params.Constraint,
+			"ExpectedOutput":  	params.ExpectedOutput,
+			"ImageUrls":   		params.ImageUrls,
 		},
 	}
 
@@ -242,3 +295,10 @@ func (q *QuestionService) QueryAllQuestions(client *mongo.Client) ([]Question, e
 	}
 	return questionList, nil
 }
+
+// func (q *QuestionService) QueryTop5MatchedQuestions(client *mongo.Client) ([]Question, error) {
+// 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+// 	var top5_question []Question
+
+// 	cursor, err := questionColl.Find(context.TODO(), bson)
+// }
