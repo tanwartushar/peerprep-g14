@@ -16,7 +16,7 @@ router.get("/user/auth/github", (req: Request, res: Response) => {
   const baseUrl = process.env.BASE_URL || "";
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: `${baseUrl}/user/user/login`,
+    redirect_uri: `${baseUrl}/user/user/login`, 
     scope: "user:email",
   };
 
@@ -130,9 +130,9 @@ router.get("/user/user/login", async (req: Request, res: Response) => {
     });
 
     if (isNewUser) {
-      res.redirect(`/profile-setup?userId=${user.id}`);
+      res.redirect(`/#/profile-setup?userId=${user.id}`);
     } else {
-      res.redirect(`/dashboard`);
+      res.redirect(`/#/dashboard`);
     }
   } catch (err) {
     console.error("GitHub OAuth Login Error:", err);
