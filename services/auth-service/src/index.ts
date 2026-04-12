@@ -149,6 +149,3 @@ server.on('upgrade', (req: any, socket: any, head: any) => {
     socket.destroy();
   }
 });
-
-
-
