@@ -142,10 +142,12 @@ export const AdminDashboard: React.FC = () => {
     setIsSaving(true);
     try {
       let finalId = editingId;
-      const storageId = finalId || crypto.randomUUID();
+      const storageId = finalId || typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Date.now().toString(36) + Math.random().toString(36).substring(2);
 
-      const originalUrls = editingId 
-        ? questions.find((q) => q.id === editingId)?.imageUrls || [] 
+      const originalUrls = editingId
+        ? questions.find((q) => q.id === editingId)?.imageUrls || []
         : [];
       const removedUrls = originalUrls.filter(url => !formData.imageUrls.includes(url));
 

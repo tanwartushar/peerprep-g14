@@ -18,14 +18,16 @@ const storage = getStorage(app);
  */
 export const uploadQuestionImage = async (questionId: string, file: File): Promise<string> => {
   if (!file) throw new Error("No file provided");
-  
-  const uuid = crypto.randomUUID();
+
+  const uuid = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + Math.random().toString(36).substring(2);
   const ext = file.name.split('.').pop();
   const path = `question-images/${questionId}/${uuid}.${ext}`;
-  
+
   const storageRef = ref(storage, path);
   const uploadTask = uploadBytesResumable(storageRef, file);
-  
+
   return new Promise((resolve, reject) => {
     uploadTask.on(
       "state_changed",
