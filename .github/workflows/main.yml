@@ -50,8 +50,21 @@ jobs:
         REPO_NAME: peerprep-g-14-${{ matrix.service_name }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Build the container and give it TWO tags at once
-        docker build \
+        # Initialize an empty string for build arguments
+        BUILD_ARGS=""
+
+        # Only if the current matrix service is "frontend", we add the Firebase args
+        if [ "${{ matrix.service_name }}" == "frontend" ]; then
+          BUILD_ARGS="--build-arg VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }} \
+                      --build-arg VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }} \
+                      --build-arg VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }} \
+                      --build-arg VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }} \
+                      --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }} \
+                      --build-arg VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}"
+        fi
+
+        # Run the build using the dynamically generated BUILD_ARGS
+        docker build $BUILD_ARGS \
           -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG \
           -t $ECR_REGISTRY/$REPO_NAME:latest \
           -f ./${{ matrix.folder }}/Dockerfile.prod \
