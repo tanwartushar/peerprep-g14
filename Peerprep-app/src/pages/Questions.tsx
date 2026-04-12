@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
+import { v4 as uuidv4 } from 'uuid';
 
 import QuestionBrowser from "../components/QuestionBrowser";
 import QuestionImageManager from "../components/QuestionImageManager";
@@ -151,9 +152,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     setIsSaving(true);
     try {
       let finalId = editingId;
-      const storageId = finalId || typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : Date.now().toString(36) + Math.random().toString(36).substring(2);
+      const storageId = finalId || uuidv4();
 
       const originalUrls = editingId
         ? questions.find((q) => q.id === editingId)?.imageUrls || []

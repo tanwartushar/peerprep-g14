@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { v4 as uuidv4 } from 'uuid';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,9 +20,7 @@ const storage = getStorage(app);
 export const uploadQuestionImage = async (questionId: string, file: File): Promise<string> => {
   if (!file) throw new Error("No file provided");
 
-  const uuid = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : Date.now().toString(36) + Math.random().toString(36).substring(2);
+  const uuid = uuidv4();
   const ext = file.name.split('.').pop();
   const path = `question-images/${questionId}/${uuid}.${ext}`;
 

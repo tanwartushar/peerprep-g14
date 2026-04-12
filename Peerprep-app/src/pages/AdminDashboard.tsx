@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
+import { v4 as uuidv4 } from 'uuid';
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { Input } from "../components/Input";
@@ -21,6 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import QuestionBrowser from "../components/QuestionBrowser";
 import QuestionImageManager from "../components/QuestionImageManager";
 import { uploadQuestionImage, deleteQuestionImage } from "../firebaseClient";
+
 
 // --- Types & Constants ---
 interface Question {
@@ -142,9 +144,7 @@ export const AdminDashboard: React.FC = () => {
     setIsSaving(true);
     try {
       let finalId = editingId;
-      const storageId = finalId || typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : Date.now().toString(36) + Math.random().toString(36).substring(2);
+      const storageId = finalId || uuidv4();
 
       const originalUrls = editingId
         ? questions.find((q) => q.id === editingId)?.imageUrls || []
