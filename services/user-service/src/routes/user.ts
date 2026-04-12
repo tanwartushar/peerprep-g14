@@ -116,12 +116,14 @@ router.get("/user/user/login", async (req: Request, res: Response) => {
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
