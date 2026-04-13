@@ -5,7 +5,7 @@ import express, { type Application } from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 // @ts-ignore
-import { setupWSConnection, setPersistence } from 'y-websocket/bin/utils';
+import { setupWSConnection, docs } from 'y-websocket/bin/utils';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -15,7 +15,9 @@ import type * as Y from 'yjs';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const Yjs = require('yjs');
+
 import sessionRouter from './routes/session.js';
+import { SessionManager } from './services/SessionManager.js';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3004;
@@ -33,43 +35,40 @@ const server = createServer(app);
 
 const wss = new WebSocketServer({ noServer: true });
 
-setPersistence({
-  bindState: async (docName: string, ydoc: Y.Doc) => {
-    try {
-      const session = await prisma.session.findUnique({
-        where: { id: docName }
-      });
-      if (session && session.docState) {
-        Yjs.applyUpdate(ydoc, session.docState);
-      }
-    } catch (err) {
-      console.error(`[DB] Failed to bind state for ${docName}:`, err);
-    }
-  },
-  writeState: async (docName: string, ydoc: Y.Doc) => {
-    try {
-      const state = Yjs.encodeStateAsUpdate(ydoc);
-      await prisma.session.upsert({
-        where: { id: docName },
-        update: { docState: Buffer.from(state) },
-        create: {
-          id: docName,
-          docState: Buffer.from(state),
-          user1Id: 'system',
-          user2Id: 'system',
-          questionId: 'system',
-          language: 'javascript'
-        }
-      });
-    } catch (err) {
-      console.error(`[DB] Failed to write state for ${docName}:`, err);
-    }
-  }
-});
+SessionManager.init(prisma, Yjs);
 
-wss.on('connection', (conn: any, req: any, { docName }: any) => {
+wss.on('connection', async (conn: any, req: any, { docName }: any) => {
   console.log(`[WS] Connection established for docName: ${docName}`);
+
+  // 1. establish the connection which internally creates and registers the Y.Doc
   setupWSConnection(conn, req, { docName, gc: true });
+
+  const ydoc = docs.get(docName);
+
+  // 2. fetch Prisma state and save the ydoc instance.
+  try {
+    const session = await prisma.session.findUnique({
+      where: { id: docName }
+    });
+
+    if (session && session.status === 'terminated') {
+      console.log(`[WS] Rejecting connection because session is terminated: ${docName}`);
+      conn.close(4000, 'Session has been permanently terminated.');
+      return;
+    }
+
+    if (session && session.docState && ydoc) {
+      Yjs.applyUpdate(ydoc, session.docState);
+    }
+  } catch (err) {
+    console.error(`[DB] Failed to explicitly bind state for ${docName}:`, err);
+  }
+
+  if (ydoc) {
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const userId = url.searchParams.get('userId') || req.headers['x-user-id']?.toString() || 'anonymous';
+    SessionManager.handleConnection(conn, docName, ydoc, userId);
+  }
 });
 
 server.on('upgrade', (request, socket, head) => {
@@ -80,7 +79,7 @@ server.on('upgrade', (request, socket, head) => {
   if (url.pathname.startsWith('/api/collaboration/ws/')) {
     const docName = url.pathname.split('/').pop() || 'default';
     console.log(`[COLLAB-WS] Handling upgrade for docName: ${docName}`);
-    wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.handleUpgrade(request, socket, head, (ws: any) => {
       wss.emit('connection', ws, request, { docName });
     });
   } else {

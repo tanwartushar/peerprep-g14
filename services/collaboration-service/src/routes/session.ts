@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
+import { SessionManager } from '../services/SessionManager.js';
+
 const { Pool } = pg;
 
 const router = Router();
@@ -29,12 +31,12 @@ type MatchRequestJson = {
 
 type VerifiedPair =
     | {
-          kind: 'ok';
-          sessionId: string;
-          user1Id: string;
-          user2Id: string;
-          language: string;
-      }
+        kind: 'ok';
+        sessionId: string;
+        user1Id: string;
+        user2Id: string;
+        language: string;
+    }
     | { kind: 'verify_failed' }
     | { kind: 'upstream'; httpStatus: number };
 
@@ -137,6 +139,32 @@ router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
     }
 });
 
+// GET /api/collaboration/sessions/active
+router.get('/sessions/active', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const authUserId = singleHeader(req, 'x-user-id');
+        if (!authUserId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const latestSession = await prisma.session.findFirst({
+            where: {
+                OR: [{ user1Id: authUserId }, { user2Id: authUserId }]
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        if (!latestSession) {
+            return res.status(204).send();
+        }
+
+        return res.status(200).json(latestSession);
+    } catch (error) {
+        console.error('Failed to get active session:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // GET /api/collaboration/sessions/:id
 router.get('/sessions/:id', async (req: Request, res: Response): Promise<any> => {
     try {
@@ -168,6 +196,47 @@ router.get('/sessions/:id', async (req: Request, res: Response): Promise<any> =>
     } catch (error) {
         console.error('Failed to get session:', error);
         return res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// PATCH /api/collaboration/sessions/:id/terminate
+router.patch('/sessions/:id/terminate', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const authUserId = singleHeader(req, 'x-user-id');
+        if (!authUserId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const rawSessionId = req.params['id'];
+        const sessionId = typeof rawSessionId === 'string' ? rawSessionId : rawSessionId?.[0];
+
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Invalid session id' });
+        }
+
+        const session = await prisma.session.findUnique({ where: { id: sessionId } });
+
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (session.user1Id !== authUserId && session.user2Id !== authUserId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        if (session.status === 'terminated') {
+            return res.status(200).json({ message: 'Session already terminated' });
+        }
+
+        await SessionManager.terminateSession(
+            sessionId,
+            'This session was ended by your peer. Returning to the dashboard',
+            authUserId,
+            'Deliberate'
+        );
+
+        return res.status(200).json({ message: 'Session terminated' });
+    } catch (error) {
+        console.error('Failed to terminate session:', error);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 });
 

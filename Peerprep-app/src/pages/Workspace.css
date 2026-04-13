@@ -22,11 +22,9 @@
 .workspace-match-banner {
   flex-shrink: 0;
   padding: 0.65rem 1.5rem;
-  background: linear-gradient(
-    90deg,
-    rgb(var(--user-600-rgb) / 0.18),
-    rgb(var(--user-400-rgb) / 0.1)
-  );
+  background: linear-gradient(90deg,
+      rgb(var(--user-600-rgb) / 0.18),
+      rgb(var(--user-400-rgb) / 0.1));
   border-bottom: 1px solid rgb(var(--user-400-rgb) / 0.18);
   font-size: 0.875rem;
   color: var(--user-200);
@@ -351,4 +349,27 @@
 .chat-fab:hover {
   transform: scale(1.05);
   background: var(--user-400);
+}
+
+/* Remote cursor presence (y-monaco) */
+
+.yRemoteSelection {
+  opacity: 0.5;
+}
+
+.yRemoteSelectionHead {
+  position: relative;
+}
+
+/* name label above the caret */
+.yRemoteSelectionHead::after {
+  position: absolute;
+  top: -18px;
+  left: -2px;
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  border-radius: 3px 3px 3px 0;
+  padding: 1px 5px;
+  z-index: 10;
 }

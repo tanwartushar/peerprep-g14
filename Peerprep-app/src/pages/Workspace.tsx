@@ -37,6 +37,22 @@ function formatMinutesLine(m: number | null | undefined): string {
   return `${m} min`;
 }
 
+function getFileExtension(language: string | undefined): string {
+  if (!language) return ".js"; // default
+
+  switch (language.toLowerCase()) {
+    case "python": return ".py";
+    case "java": return ".java";
+    case "c++":
+    case "cpp": return ".cpp";
+    case "c": return ".c";
+    case "go": return ".go";
+    case "typescript": return ".ts";
+    case "javascript": return ".js";
+    default: return ".txt";
+  }
+}
+
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,6 +83,24 @@ export const Workspace: React.FC = () => {
   const [sessionId, setSessionId] = useState<string>("default-session");
   const [question, setQuestion] = useState<any>(null);
   const [isSessionLoading, setIsSessionLoading] = useState(true);
+  const [partnerOnline, setPartnerOnline] = useState(true);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [isTerminating, setIsTerminating] = useState(false);
+  const [hasSessionEnded, setHasSessionEnded] = useState(false);
+  const sessionEndedRef = React.useRef(false);
+
+  const endSessionOnce = React.useCallback(
+    (reason?: string) => {
+      if (sessionEndedRef.current) return false;
+      sessionEndedRef.current = true;
+      setHasSessionEnded(true);
+      setShowDisconnectModal(false);
+      if (reason) alert(reason);
+      navigate("/user/dashboard");
+      return true;
+    },
+    [navigate],
+  );
 
   React.useEffect(() => {
     if (!state?.requestId || !state?.peerMatchRequestId) {
@@ -92,6 +126,14 @@ export const Workspace: React.FC = () => {
         );
         if (sessionRes.ok) {
           const sessionData = await sessionRes.json();
+
+          if (sessionData.status === "terminated") {
+            if (mounted) {
+              setIsSessionLoading(false);
+              endSessionOnce("This session has ended. Returning to Dashboard.");
+            }
+            return;
+          }
 
           // fetch question
           const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
@@ -174,12 +216,67 @@ export const Workspace: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [state]);
+  }, [state, endSessionOnce]);
+
+  // exit if Yjs WebSockets miss TCP termination CRDT
+  React.useEffect(() => {
+    if (!sessionId || isSessionLoading) return;
+    const interval = setInterval(async () => {
+      try {
+        if (sessionEndedRef.current) return;
+        const res = await fetch(`/api/collaboration/sessions/${sessionId}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "terminated") {
+            endSessionOnce("This session has ended. Returning to Dashboard.");
+          }
+          return;
+        }
+        if (res.status === 403 || res.status === 404) {
+          endSessionOnce(
+            "This session is no longer available. Returning to Dashboard.",
+          );
+        }
+      } catch (e) { }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [sessionId, isSessionLoading, endSessionOnce]);
+
+  const handleEndSessionInstantly = async () => {
+    if (isTerminating || sessionEndedRef.current) return;
+    setIsTerminating(true);
+    setShowDisconnectModal(false);
+    try {
+      await fetch(`/api/collaboration/sessions/${sessionId}/terminate`, {
+        method: 'PATCH',
+        credentials: 'include'
+      });
+    } catch (e) { }
+    endSessionOnce();
+  };
 
   const handleEndSession = () => {
-    if (window.confirm("Are you sure you want to end this session?")) {
-      navigate("/user/dashboard");
+    if (window.confirm("This will end the session for both peers. Are you sure you want to end this session?")) {
+      void handleEndSessionInstantly();
     }
+  };
+
+  const handleSystemTerminate = async (reason: string) => {
+    if (sessionEndedRef.current) return;
+    try {
+      await fetch(`/api/collaboration/sessions/${sessionId}/terminate`, {
+        method: 'PATCH',
+        credentials: 'include'
+      });
+    } catch (e) { }
+    endSessionOnce(reason);
+  };
+
+  const handlePartnerPresenceChange = (isPresent: boolean) => {
+    if (isTerminating || sessionEndedRef.current) return;
+    setPartnerOnline(isPresent);
+    if (!isPresent) setShowDisconnectModal(true);
+    else setShowDisconnectModal(false);
   };
 
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
@@ -215,7 +312,7 @@ export const Workspace: React.FC = () => {
 
         <div className="header-right">
           <div className="peer-status">
-            <div className="status-indicator online"></div>
+            <div className={`status-indicator ${partnerOnline ? 'online' : 'offline'}`} style={{ backgroundColor: partnerOnline ? 'var(--success-color)' : 'var(--danger-color)' }}></div>
             <span className="text-sm text-secondary">
               {state?.peerUserId
                 ? `Peer: ${state.peerUserId}`
@@ -377,7 +474,7 @@ export const Workspace: React.FC = () => {
             <div className="editor-tabs">
               <button className="editor-tab active">
                 <Code2 className="h-4 w-4 mr-2" />
-                solution.js
+                solution{getFileExtension(state?.programmingLanguage)}
               </button>
             </div>
             <div className="editor-actions">
@@ -402,14 +499,17 @@ export const Workspace: React.FC = () => {
               >
                 Connecting to a collaborative session...
               </div>
-            ) : (
+            ) : !hasSessionEnded ? (
               <CodeEditor
                 value={code}
                 onChange={(val) => setCode(val || "")}
+                language={state?.programmingLanguage || 'javascript'}
                 currentUser={currentUser}
                 sessionId={sessionId}
+                onSystemTerminate={handleSystemTerminate}
+                onPartnerPresenceChange={handlePartnerPresenceChange}
               />
-            )}
+            ) : null}
           </div>
 
           <div className="editor-console">
@@ -429,6 +529,23 @@ export const Workspace: React.FC = () => {
       <button className="chat-fab">
         <MessageSquare className="h-6 w-6" />
       </button>
+
+      {/* Disconnection Modal */}
+      {showDisconnectModal && !partnerOnline && !hasSessionEnded && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Peer Disconnected!</h2>
+            <p style={{ marginBottom: '1.5rem', color: '#444' }}>
+              Your peer got disconnected. This session will be closed in 2 minutes to free up resources.<br /><br />
+              You can either Wait for them to reconnect, or end this session and Return to your Dashboard.
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <Button variant="ghost" theme="user" onClick={() => setShowDisconnectModal(false)}>Wait</Button>
+              <Button variant="solid" theme="user" onClick={() => void handleEndSessionInstantly()}>Return to Dashboard</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
