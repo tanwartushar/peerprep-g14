@@ -11,6 +11,7 @@ import {
 import { Button } from "../components/Button";
 import { CodeEditor } from "../components/CodeEditor";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
+import { useAuth } from "../context/AuthContext";
 import "./Workspace.css";
 
 interface LocationState {
@@ -58,6 +59,7 @@ export const Workspace: React.FC = () => {
   const location = useLocation();
   const state = location.state as LocationState;
   const { data: profile } = useCurrentUserProfile();
+  const { userId } = useAuth();
   const currentUser = React.useMemo(() => {
     const colors = [
       "#f56565",
@@ -146,11 +148,15 @@ export const Workspace: React.FC = () => {
         }
 
         if (sessionRes.status === 404) {
-          // 2. fetch a random question matching the topic & difficulty
-          // since question-service returns an array for list endpoints, we try exact match first
+          // 2. fetch a random question matching the topic & difficulty,
+          //    excluding questions already completed by either user
           const formattedTopic = (state.topic || "").replace("-", "_");
+          const userParams =
+            userId && state.peerUserId
+              ? `&user1=${encodeURIComponent(userId)}&user2=${encodeURIComponent(state.peerUserId)}`
+              : "";
           let qRes = await fetch(
-            `/api/questions/?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}`,
+            `/api/questions/available?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}${userParams}`,
           );
           let selectedQ: any = null;
 
@@ -164,7 +170,7 @@ export const Workspace: React.FC = () => {
           // fallback to match ONLY by difficulty if topic returned nothing
           if (!selectedQ) {
             qRes = await fetch(
-              `/api/questions/?difficulty=${state.difficulty || "medium"}`,
+              `/api/questions/available?difficulty=${state.difficulty || "medium"}${userParams}`,
             );
             if (qRes.ok) {
               const qList = await qRes.json();
@@ -176,7 +182,7 @@ export const Workspace: React.FC = () => {
 
           // fallback to ANY question if difficulty returned nothing
           if (!selectedQ) {
-            qRes = await fetch(`/api/questions/`);
+            qRes = await fetch(`/api/questions/available?${userParams.slice(1)}`);
             if (qRes.ok) {
               const qList = await qRes.json();
               if (qList && qList.length > 0) {
@@ -252,6 +258,18 @@ export const Workspace: React.FC = () => {
         credentials: 'include'
       });
     } catch (e) { }
+    // Mark question as completed for both users
+    if (question && userId && state?.peerUserId) {
+      await fetch("/api/questions/completed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          userIds: [userId, state.peerUserId],
+          questionId: question._id || question.id,
+        }),
+      }).catch(console.error);
+    }
     endSessionOnce();
   };
 

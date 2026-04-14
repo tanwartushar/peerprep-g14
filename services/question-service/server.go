@@ -38,6 +38,9 @@ func main() {
 	//curl.exe -X GET "http://localhost:3002/?difficulty=medium&topic=depth_first_search"
 	//curl.exe -X GET "http://localhost:3002/?difficulty=hard&topic=depth_first_search"
     r.GET("/", h.GetQuestionsRequest)
+	// available questions (excludes completed) — must be before /:id
+	r.GET("/available", h.GetAvailableQuestionsRequest)
+	r.POST("/completed", h.PostMarkCompletedRequest)
 	//curl.exe -X GET http://localhost:3002/69a4454453ab6df3d3679d65
     r.GET("/:id", h.GetQuestionByIDRequest)
 

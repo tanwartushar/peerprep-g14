@@ -114,6 +114,63 @@ func (h *Handler) DeleteQuestionRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
 }
 
+// GetAvailableQuestionsRequest returns questions excluding those completed by given users
+func (h *Handler) GetAvailableQuestionsRequest(c *gin.Context) {
+	difficulty := c.Query("difficulty")
+	topic := c.Query("topic")
+	user1 := c.Query("user1")
+	user2 := c.Query("user2")
+
+	var userIds []string
+	if user1 != "" {
+		userIds = append(userIds, user1)
+	}
+	if user2 != "" {
+		userIds = append(userIds, user2)
+	}
+
+	var excludeIds []string
+	if len(userIds) > 0 {
+		var err error
+		excludeIds, err = h.QuestSvc.GetCompletedQuestionIds(userIds, h.DB)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch completed questions"})
+			return
+		}
+	}
+
+	questions, err := h.QuestSvc.GetAvailableQuestions(difficulty, topic, excludeIds, h.DB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch questions"})
+		return
+	}
+
+	c.JSON(http.StatusOK, questions)
+}
+
+// PostMarkCompletedRequest marks a question as completed for the given users
+func (h *Handler) PostMarkCompletedRequest(c *gin.Context) {
+	var params repository.MarkCompletedParams
+
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if len(params.UserIds) == 0 || params.QuestionId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "userIds and questionId are required"})
+		return
+	}
+
+	err := h.QuestSvc.MarkQuestionsCompleted(params.UserIds, params.QuestionId, h.DB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Questions marked as completed"})
+}
+
 // AdminOnly Middleware enforces that the requester has the 'ADMIN' role
 func AdminOnly() gin.HandlerFunc {
 	return func(c *gin.Context) {

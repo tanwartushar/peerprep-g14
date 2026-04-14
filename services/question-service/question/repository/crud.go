@@ -14,6 +14,7 @@ import (
 	"github.com/tgonet/peerprep-g14/services/question-service/question/validation"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"github.com/sony/gobreaker"
 	// "go.mongodb.org/mongo-driver/v2/mongo"
 	// "golang.org/x/text/cases"
@@ -23,6 +24,7 @@ type QuestionService struct{}
 
 var quest_col string = "question_collection"
 var test_col string = "testcase_collection"
+var completed_col string = "completed_collection"
 
 type difficulty int
 type topic int
@@ -53,6 +55,17 @@ type Question struct {
 	CreatedAt   string   		`json:"createdAt" bson:"CreatedAt"`
 	ImageUrls   []string 		`json:"imageUrls" bson:"ImageUrls"`
 	Matched 	int				`json:"matched" bson:"Matched"`
+}
+
+type CompletedRecord struct {
+	ID                bson.ObjectID `json:"_id,omitempty" bson:"_id,omitempty"`
+	UserId            string        `json:"userId" bson:"UserId"`
+	CompletedQuestion []string      `json:"completedQuestion" bson:"CompletedQuestion"`
+}
+
+type MarkCompletedParams struct {
+	UserIds    []string `json:"userIds"`
+	QuestionId string   `json:"questionId"`
 }
 
 type CreateQuestionParams struct {
@@ -296,9 +309,97 @@ func (q *QuestionService) QueryAllQuestions(client *mongo.Client) ([]Question, e
 	return questionList, nil
 }
 
-// func (q *QuestionService) QueryTop5MatchedQuestions(client *mongo.Client) ([]Question, error) {
-// 	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
-// 	var top5_question []Question
+// GetCompletedQuestionIds returns a deduplicated list of question IDs
+// that any of the given users have completed.
+func (q *QuestionService) GetCompletedQuestionIds(userIds []string, client *mongo.Client) ([]string, error) {
+	completedColl := client.Database("questionTestcaseDB").Collection(completed_col)
 
-// 	cursor, err := questionColl.Find(context.TODO(), bson)
-// }
+	filter := bson.M{"UserId": bson.M{"$in": userIds}}
+	cursor, err := completedColl.Find(context.TODO(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	seen := map[string]bool{}
+	var result []string
+
+	var records []CompletedRecord
+	if err = cursor.All(context.TODO(), &records); err != nil {
+		return nil, err
+	}
+
+	for _, rec := range records {
+		for _, qid := range rec.CompletedQuestion {
+			if !seen[qid] {
+				seen[qid] = true
+				result = append(result, qid)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// GetAvailableQuestions returns questions matching difficulty/topic filters,
+// excluding any questions whose IDs are in excludeIds.
+func (q *QuestionService) GetAvailableQuestions(difficulty string, topic string, excludeIds []string, client *mongo.Client) ([]Question, error) {
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	filter := bson.M{}
+	if difficulty != "" {
+		filter["Difficulty"] = difficulty
+	}
+	if topic != "" {
+		filter["Topics"] = bson.M{"$in": []string{topic}}
+	}
+
+	if len(excludeIds) > 0 {
+		var excludeObjIds []bson.ObjectID
+		for _, id := range excludeIds {
+			objID, err := bson.ObjectIDFromHex(id)
+			if err == nil {
+				excludeObjIds = append(excludeObjIds, objID)
+			}
+		}
+		if len(excludeObjIds) > 0 {
+			filter["_id"] = bson.M{"$nin": excludeObjIds}
+		}
+	}
+
+	cursor, err := questionColl.Find(context.TODO(), filter)
+	if err != nil {
+		return FallbackQuestions, nil
+	}
+	defer cursor.Close(context.TODO())
+
+	var questions []Question
+	if err = cursor.All(context.TODO(), &questions); err != nil {
+		return FallbackQuestions, nil
+	}
+
+	if questions == nil {
+		questions = []Question{}
+	}
+
+	return questions, nil
+}
+
+// MarkQuestionsCompleted adds questionId to each user's CompletedQuestion array
+// using upsert + $addToSet to avoid duplicates.
+func (q *QuestionService) MarkQuestionsCompleted(userIds []string, questionId string, client *mongo.Client) error {
+	completedColl := client.Database("questionTestcaseDB").Collection(completed_col)
+
+	for _, uid := range userIds {
+		filter := bson.M{"UserId": uid}
+		update := bson.M{
+			"$addToSet": bson.M{"CompletedQuestion": questionId},
+		}
+		_, err := completedColl.UpdateOne(context.TODO(), filter, update, options.UpdateOne().SetUpsert(true))
+		if err != nil {
+			return fmt.Errorf("failed to mark completed for user %s: %w", uid, err)
+		}
+	}
+
+	return nil
+}
