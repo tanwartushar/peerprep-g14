@@ -215,7 +215,7 @@ export const Dashboard: React.FC = () => {
   ];
 
   return (
-    <div className="animate-fade-in">
+    <div className="dashboard-page animate-fade-in">
       <div className="dashboard-layout">
         <div className="dashboard-main-container">
           <Card
