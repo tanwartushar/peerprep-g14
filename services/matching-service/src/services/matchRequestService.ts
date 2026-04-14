@@ -375,6 +375,18 @@ export async function getMatchRequestForUser(
   return row ? toDTO(asMatchRow(row)) : null;
 }
 
+/** At most one PENDING row per user (partial unique index). */
+export async function getActiveMatchRequestForUser(
+  userId: string,
+): Promise<MatchRequestDTO | null> {
+  await tryMatchQueueAndPublish();
+
+  const row = await prisma.matchRequest.findFirst({
+    where: { userId, status: "PENDING" } as MRWhere,
+  });
+  return row ? toDTO(asMatchRow(row)) : null;
+}
+
 export async function disconnectMatchRequestForUser(
   id: string,
   userId: string,

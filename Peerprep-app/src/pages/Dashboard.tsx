@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 import "./Dashboard.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
-import { createMatchRequest } from "../api/matching";
+import { createMatchRequest, getActiveMatchRequest } from "../api/matching";
 import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 import { setActiveMatchRequestId } from "../matching/matchingSession";
 import {
@@ -80,9 +80,33 @@ export const Dashboard: React.FC = () => {
               topic: ''
             }
           });
+          return;
         }
       } catch (e) {
         // dashboard renders normally
+      }
+
+      const effId = getEffectiveMatchingUserId(userId);
+      if (!effId || !mounted) return;
+      try {
+        const matchRes = await getActiveMatchRequest(effId);
+        if (!mounted) return;
+        if (matchRes.ok && matchRes.data.status === "PENDING") {
+          setActiveMatchRequestId(matchRes.data.id);
+          navigate("/matching", {
+            state: {
+              requestId: matchRes.data.id,
+              topic: matchRes.data.topic,
+              difficulty: matchRes.data.difficulty,
+              programmingLanguage: matchRes.data.programmingLanguage,
+              allowLowerDifficultyMatch: matchRes.data.allowLowerDifficultyMatch,
+              timeAvailableMinutes:
+                matchRes.data.timeAvailableMinutes ?? undefined,
+            },
+          });
+        }
+      } catch {
+        /* ignore */
       }
     };
 

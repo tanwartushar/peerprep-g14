@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import {
   cancelMatchRequest,
   disconnectMatchRequestKeepalive,
+  getActiveMatchRequest,
   getMatchRequest,
   reconnectMatchRequest,
 } from "../api/matching";
@@ -34,10 +35,14 @@ export const Matching: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const locState = location.state as LocationState | null;
-  const { userId } = useAuth();
+  const { userId, isLoading: authLoading } = useAuth();
 
-  const [requestId] = useState(
-    () => locState?.requestId ?? getActiveMatchRequestId() ?? "",
+  const initialRequestId =
+    locState?.requestId ?? getActiveMatchRequestId() ?? null;
+  const [requestId, setRequestId] = useState<string | null>(initialRequestId);
+  /** After tab close, session/local storage may be empty — resolve from `GET /requests/active`. */
+  const [idResolution, setIdResolution] = useState<"pending" | "done">(() =>
+    initialRequestId ? "done" : "pending",
   );
 
   /** Merged from route + GET; drives the detail rows */
@@ -79,15 +84,41 @@ export const Matching: React.FC = () => {
 
   const effectiveUserId = getEffectiveMatchingUserId(userId);
 
+  /** Resolve request id from server when the tab was closed (no cached id). */
   useEffect(() => {
+    if (authLoading) return;
+    if (idResolution === "done") return;
+    if (!effectiveUserId) {
+      setIdResolution("done");
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const r = await getActiveMatchRequest(effectiveUserId);
+      if (cancelled) return;
+      if (r.ok && r.data.status === "PENDING") {
+        setRequestId(r.data.id);
+        setActiveMatchRequestId(r.data.id);
+      }
+      setIdResolution("done");
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, idResolution, effectiveUserId]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (idResolution !== "done") return;
     if (!requestId) {
       navigate("/user/dashboard", { replace: true });
     }
-  }, [requestId, navigate]);
+  }, [authLoading, idResolution, requestId, navigate]);
 
   /** Bootstrap + optional reconnect (F9) */
   useEffect(() => {
-    if (!requestId || !effectiveUserId) return;
+    if (authLoading) return;
+    if (idResolution !== "done" || !requestId || !effectiveUserId) return;
 
     let cancelled = false;
 
@@ -198,7 +229,14 @@ export const Matching: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [requestId, effectiveUserId, navigate, locState?.requestId]);
+  }, [
+    authLoading,
+    idResolution,
+    requestId,
+    effectiveUserId,
+    navigate,
+    locState?.requestId,
+  ]);
 
   useEffect(() => {
     if (terminal !== "none" || !ready) return;
@@ -329,6 +367,22 @@ export const Matching: React.FC = () => {
     : terminal === "timeout"
       ? "Timeout"
       : "Search ended";
+
+  if (authLoading || idResolution === "pending") {
+    return (
+      <div className="matching-layout animate-fade-in">
+        <div className="matching-container">
+          <Card theme="user" className="matching-card">
+            <div className="matching-card__inner">
+              <p className="matching-poll-hint" role="status">
+                Loading your match…
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="matching-layout animate-fade-in">

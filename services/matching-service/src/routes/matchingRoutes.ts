@@ -7,6 +7,7 @@ import {
   cancelMatchRequestForUser,
   createMatchRequest,
   disconnectMatchRequestForUser,
+  getActiveMatchRequestForUser,
   getMatchRequestForUser,
   reconnectMatchRequestForUser,
 } from "../services/matchRequestService.js";
@@ -43,6 +44,24 @@ router.post(
         res.status(400).json({ error: "Validation failed", details: e.issues });
         return;
       }
+      sendServerError(res, e);
+    }
+  },
+);
+
+router.get(
+  "/requests/active",
+  requireUserId,
+  async (req: Request, res: Response) => {
+    const userId = req.userId!;
+    try {
+      const row = await getActiveMatchRequestForUser(userId);
+      if (!row) {
+        res.status(204).end();
+        return;
+      }
+      res.status(200).json(row);
+    } catch (e) {
       sendServerError(res, e);
     }
   },

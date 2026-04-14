@@ -199,7 +199,9 @@ export async function reconnectMatchRequest(
 }
 
 /**
- * Fire-and-forget disconnect for page unload (F9). Uses keepalive so the request may complete after navigation.
+ * Fire-and-forget disconnect for tab close / navigation (F9).
+ * Prefer `sendBeacon` (more reliable on unload); fall back to `fetch({ keepalive: true })`.
+ * Same-origin `/api/matching` sends session cookies; dev may still need `x-user-id` (fetch path only).
  */
 export function disconnectMatchRequestKeepalive(
   effectiveUserId: string | null,
@@ -207,6 +209,14 @@ export function disconnectMatchRequestKeepalive(
 ): void {
   const prefix = getMatchingApiPrefix();
   const url = `${prefix}/requests/${encodeURIComponent(requestId)}/disconnect`;
+  const body = "{}";
+  const blob = new Blob([body], { type: "application/json" });
+
+  if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+    const ok = navigator.sendBeacon(url, blob);
+    if (ok) return;
+  }
+
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
   if (import.meta.env.DEV && effectiveUserId) {
@@ -215,10 +225,60 @@ export function disconnectMatchRequestKeepalive(
   void fetch(url, {
     method: "POST",
     headers,
-    body: "{}",
+    body,
     keepalive: true,
     credentials: import.meta.env.PROD ? "include" : "same-origin",
   });
+}
+
+/**
+ * Current user’s single PENDING match request, if any (`GET .../requests/active` → 200 or 204).
+ */
+export async function getActiveMatchRequest(
+  effectiveUserId: string | null,
+): Promise<
+  | { ok: true; data: MatchRequestResponse }
+  | { ok: false; status: number; message: string }
+> {
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/active`;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      url,
+      matchingFetchInit(effectiveUserId, { method: "GET" }),
+    );
+  } catch (e) {
+    const hint = e instanceof Error ? e.message : "Network error";
+    return {
+      ok: false,
+      status: 0,
+      message: `Cannot reach matching service (${hint})`,
+    };
+  }
+
+  if (res.status === 204) {
+    return {
+      ok: false,
+      status: 204,
+      message: "No active match request",
+    };
+  }
+
+  if (res.ok) {
+    const data = (await res.json()) as MatchRequestResponse;
+    return { ok: true, data };
+  }
+
+  let message = res.statusText;
+  try {
+    const err = (await res.json()) as { error?: string };
+    if (err.error) message = err.error;
+  } catch {
+    /* ignore */
+  }
+  return { ok: false, status: res.status, message };
 }
 
 export async function getMatchRequest(
