@@ -1,17 +1,15 @@
 /**
- * Base URL for the matching API (matching-service listens on port **3003**; question-service is 3002).
- * - In Vite dev, use same-origin `/matching/...` (proxied to the gateway or `localhost:3003` — see vite.config.ts).
- * - Set `VITE_MATCHING_SERVICE_URL` (e.g. `http://localhost:3003`) when not using the proxy.
+ * Path prefix for matching HTTP API.
+ * - Default: `/api/matching` → gateway → auth-service (JWT) → matching-service (`/matching/...`).
+ * - Set `VITE_MATCHING_SERVICE_URL` (e.g. `http://localhost:3003`) to call matching-service directly (bypass gateway).
  */
-export function getMatchingServiceBaseUrl(): string {
+export function getMatchingApiPrefix(): string {
   const envUrl = import.meta.env.VITE_MATCHING_SERVICE_URL as string | undefined;
   if (envUrl && envUrl.length > 0) {
-    return envUrl.replace(/\/$/, "");
+    const base = envUrl.replace(/\/$/, "");
+    return `${base}/matching`;
   }
-  if (import.meta.env.DEV) {
-    return "";
-  }
-  return "http://localhost:3003";
+  return "/api/matching";
 }
 
 function matchingFetchInit(
@@ -87,8 +85,8 @@ export async function createMatchRequest(
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
 > {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests`;
 
   let res: Response;
   try {
@@ -130,8 +128,8 @@ export async function disconnectMatchRequest(
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
 > {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/disconnect`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}/disconnect`;
 
   let res: Response;
   try {
@@ -168,8 +166,8 @@ export async function reconnectMatchRequest(
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
 > {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/reconnect`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}/reconnect`;
 
   let res: Response;
   try {
@@ -207,8 +205,8 @@ export function disconnectMatchRequestKeepalive(
   effectiveUserId: string | null,
   requestId: string,
 ): void {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}/disconnect`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}/disconnect`;
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
   if (import.meta.env.DEV && effectiveUserId) {
@@ -230,8 +228,8 @@ export async function getMatchRequest(
   | { ok: true; data: MatchRequestResponse }
   | { ok: false; status: number; message: string }
 > {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}`;
 
   let res: Response;
   try {
@@ -269,8 +267,8 @@ export async function cancelMatchRequest(
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
 > {
-  const base = getMatchingServiceBaseUrl();
-  const url = `${base}/matching/requests/${encodeURIComponent(requestId)}`;
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}`;
 
   let res: Response;
   try {

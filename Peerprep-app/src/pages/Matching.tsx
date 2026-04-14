@@ -27,7 +27,7 @@ interface LocationState {
   requestId?: string;
 }
 
-/** Backend polls every 2s (matching service on port 3003, proxied as `/matching` in dev). */
+/** Backend polls every 2s (`/api/matching` via gateway + auth in dev). */
 const POLL_MS = 2000;
 
 export const Matching: React.FC = () => {

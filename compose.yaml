@@ -17,8 +17,8 @@ services:
     depends_on:
       - frontend
       - user-service
+      - auth-service
       - question-service
-      - matching-service
 
   auth-service:
     ports:
@@ -27,6 +27,9 @@ services:
       context: ./services/auth-service
       dockerfile: Dockerfile
     tty: true
+    depends_on:
+      - user-service
+      - matching-service
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
