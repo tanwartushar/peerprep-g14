@@ -1,15 +1,15 @@
 package main
 
 import (
-	"net/http"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	// "github.com/gin-contrib/cors"
-	// "github.com/tgonet/peerprep-g14/services/question-service"
 	"github.com/tgonet/peerprep-g14/services/question-service/handler"
 	"github.com/tgonet/peerprep-g14/services/question-service/internal/database"
 	"github.com/tgonet/peerprep-g14/services/question-service/question/repository"
+	rediscache "github.com/tgonet/peerprep-g14/services/question-service/question/redisCache"
 )
 
 func main() {
@@ -29,6 +29,20 @@ func main() {
 		Cache: redisClient,
 		QuestSvc: &repository.QuestionService{},
 	}
+
+	// Initial cache population
+	rediscache.CacheTop5Matched(mongoClient, redisClient)
+
+	// Periodic refresh every 15 minutes
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			log.Println("Refreshing top 5 matched questions cache...")
+			rediscache.CacheTop5Matched(mongoClient, redisClient)
+		}
+	}()
+
 	// curl.exe -X GET http://localhost:3002/health
 	r.GET("/health", func(c *gin.Context) {
         c.JSON(http.StatusOK, gin.H{"status": "healthy"})

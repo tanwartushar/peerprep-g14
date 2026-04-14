@@ -385,6 +385,45 @@ func (q *QuestionService) GetAvailableQuestions(difficulty string, topic string,
 	return questions, nil
 }
 
+// IncrementMatched atomically increments the Matched counter for a question.
+func (q *QuestionService) IncrementMatched(questionId string, client *mongo.Client) error {
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	objID, err := bson.ObjectIDFromHex(questionId)
+	if err != nil {
+		return fmt.Errorf("invalid question ID format: %w", err)
+	}
+
+	_, err = questionColl.UpdateOne(
+		context.TODO(),
+		bson.M{"_id": objID},
+		bson.M{"$inc": bson.M{"Matched": 1}},
+	)
+	return err
+}
+
+// QueryTop5MatchedQuestions returns the 5 most frequently matched questions,
+// sorted by Matched descending.
+func (q *QuestionService) QueryTop5MatchedQuestions(client *mongo.Client) ([]Question, error) {
+	questionColl := client.Database("questionTestcaseDB").Collection(quest_col)
+
+	opts := options.Find().SetSort(bson.M{"Matched": -1}).SetLimit(5)
+	cursor, err := questionColl.Find(context.TODO(), bson.M{}, opts)
+	if err != nil {
+		return []Question{}, err
+	}
+	defer cursor.Close(context.TODO())
+
+	var questions []Question
+	if err = cursor.All(context.TODO(), &questions); err != nil {
+		return []Question{}, err
+	}
+	if questions == nil {
+		questions = []Question{}
+	}
+	return questions, nil
+}
+
 // MarkQuestionsCompleted adds questionId to each user's CompletedQuestion array
 // using upsert + $addToSet to avoid duplicates.
 func (q *QuestionService) MarkQuestionsCompleted(userIds []string, questionId string, client *mongo.Client) error {
