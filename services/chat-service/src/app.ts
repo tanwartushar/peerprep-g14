@@ -112,12 +112,20 @@ app.post("/chat/channel", async (req, res) => {
 });
 
 app.delete("/chat/channel/:channelId", async (req, res) => {
-  const { channelId } = req.params;
+  try {
+    const { channelId } = req.params;
 
-  const channel = streamServerClient.channel("messaging", channelId);
-  await channel.delete();
+    const channel = streamServerClient.channel("messaging", channelId);
+    await channel.delete();
 
-  res.json({ ok: true });
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("delete channel error:", error?.response?.data || error);
+    return res.status(500).json({
+      error: "Failed to delete channel",
+      details: error?.response?.data || error?.message,
+    });
+  }
 });
 
 export default app;

@@ -389,6 +389,7 @@ export const Workspace: React.FC = () => {
         }),
       }).catch(console.error);
     }
+
     endSessionOnce();
   };
 
