@@ -19,6 +19,7 @@ services:
       - user-service
       - question-service
       - matching-service
+      - ai-service
 
   auth-service:
     ports:
@@ -170,6 +171,28 @@ services:
           target: /usr/src/app/src
         - action: rebuild
           path: ./services/collaboration-service/package.json
+
+  # --- AI SERVICE ---
+  ai-service:
+    ports:
+      - "3005:3005"
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    tty: true
+    env_file:
+      - ./services/ai-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/ai-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/ai-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/ai-service/package.json
 
 volumes:
   prometheus_data: {}

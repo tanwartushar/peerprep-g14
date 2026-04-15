@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Code2,
@@ -7,9 +7,13 @@ import {
   LogOut,
   MessageSquare,
   Play,
+  Languages,
+  Loader2,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "../components/Button";
-import { CodeEditor } from "../components/CodeEditor";
+import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
+import { TranslationModal } from "../components/TranslationModal";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import "./Workspace.css";
 
@@ -26,6 +30,15 @@ interface LocationState {
   peerTimeAvailableMinutes?: number | null;
   matchedTimeAvailableMinutes?: number | null;
 }
+
+const SUPPORTED_LANGUAGES = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'go', label: 'Go' },
+];
 
 function formatDifficultyLabel(d: string | undefined): string {
   if (!d) return "—";
@@ -87,7 +100,38 @@ export const Workspace: React.FC = () => {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const sessionEndedRef = React.useRef(false);
+
+  // Dynamic Language state
+  const [currentLanguage, setCurrentLanguage] = useState(state?.programmingLanguage || 'javascript');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
+  const [peerLanguageRequestLang, setPeerLanguageRequestLang] = useState<string | null>(null);
+  const [showLanguageRequestModal, setShowLanguageRequestModal] = useState(false);
+
+  // Translation state
+  const [pendingTranslation, setPendingTranslation] = useState<{code: string, language: string, timestamp: number} | null>(null);
+  const [pendingLanguageChange, setPendingLanguageChange] = useState<{language: string, timestamp: number} | null>(null);
+  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{language: string, timestamp: number} | null>(null);
+
+  const codeEditorRef = useRef<CodeEditorHandle>(null);
+  const [showTranslateDropdown, setShowTranslateDropdown] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationResult, setTranslationResult] = useState<string>("");
+  const [translationTargetLang, setTranslationTargetLang] = useState<string>("");
+  const [showTranslationModal, setShowTranslationModal] = useState(false);
+  const translateDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [sideToasts, setSideToasts] = useState<Array<{ id: number, message: React.ReactNode, icon: string, border: string }>>([]);
+
+  const addSideToast = useCallback((message: React.ReactNode, icon: string = 'ℹ️', border: string = 'var(--user-400)') => {
+      const id = Date.now() + Math.random();
+      setSideToasts(prev => [...prev, { id, message, icon, border }]);
+      setTimeout(() => {
+          setSideToasts(prev => prev.filter(t => t.id !== id));
+      }, 12000);
+  }, []);
 
   const endSessionOnce = React.useCallback(
     (reason?: string) => {
@@ -95,8 +139,11 @@ export const Workspace: React.FC = () => {
       sessionEndedRef.current = true;
       setHasSessionEnded(true);
       setShowDisconnectModal(false);
-      if (reason) alert(reason);
-      navigate("/user/dashboard");
+      if (reason) {
+        navigate("/user/dashboard", { state: { sessionNotification: reason } });
+      } else {
+        navigate("/user/dashboard");
+      }
       return true;
     },
     [navigate],
@@ -133,6 +180,10 @@ export const Workspace: React.FC = () => {
               endSessionOnce("This session has ended. Returning to Dashboard.");
             }
             return;
+          }
+
+          if (sessionData.language) {
+            setCurrentLanguage(sessionData.language);
           }
 
           // fetch question
@@ -242,6 +293,22 @@ export const Workspace: React.FC = () => {
     return () => clearInterval(interval);
   }, [sessionId, isSessionLoading, endSessionOnce]);
 
+  // close translate and language dropdown on outside click
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (translateDropdownRef.current && !translateDropdownRef.current.contains(e.target as Node)) {
+        setShowTranslateDropdown(false);
+      }
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(e.target as Node)) {
+        setShowLanguageDropdown(false);
+      }
+    };
+    if (showTranslateDropdown || showLanguageDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showTranslateDropdown, showLanguageDropdown]);
+
   const handleEndSessionInstantly = async () => {
     if (isTerminating || sessionEndedRef.current) return;
     setIsTerminating(true);
@@ -256,9 +323,7 @@ export const Workspace: React.FC = () => {
   };
 
   const handleEndSession = () => {
-    if (window.confirm("This will end the session for both peers. Are you sure you want to end this session?")) {
-      void handleEndSessionInstantly();
-    }
+    setShowEndSessionModal(true);
   };
 
   const handleSystemTerminate = async (reason: string) => {
@@ -279,6 +344,148 @@ export const Workspace: React.FC = () => {
     else setShowDisconnectModal(false);
   };
 
+  // translation handlers
+  const handleTranslate = async (targetLanguage: string) => {
+    setShowTranslateDropdown(false);
+    if (!codeEditorRef.current || isTranslating) return;
+
+    const currentCode = codeEditorRef.current.getCode();
+    if (!currentCode || currentCode.trim().length === 0) {
+      addSideToast("There is no code to translate. Write some code first.", "⚠️", "#ed8936");
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationTargetLang(targetLanguage);
+
+    try {
+      const res = await fetch('/api/ai/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: currentCode,
+          sourceLanguage: state?.programmingLanguage || 'javascript',
+          targetLanguage,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Translation failed');
+      }
+
+      const data = await res.json();
+      setTranslationResult(data.translatedCode);
+      setShowTranslationModal(true);
+    } catch (err: any) {
+      addSideToast(`Translation failed: ${err.message || 'Please try again.'}`, "❌", "#e53e3e");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleTranslationReject = () => {
+    setShowTranslationModal(false);
+    setTranslationResult("");
+    setTranslationTargetLang("");
+  };
+
+  const handleTranslationApprove = () => {
+    if (codeEditorRef.current && translationResult) {
+      const timestamp = Date.now();
+      setPendingTranslation({ code: translationResult, language: translationTargetLang, timestamp });
+      codeEditorRef.current.broadcastTranslationApprovalRequest(translationTargetLang, timestamp);
+    }
+    setShowTranslationModal(false);
+  };
+
+  const handlePeerTranslation = useCallback((language: string) => {
+    addSideToast(`Code translated to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language} by your peer`, '✨', 'var(--green, #48bb78)');
+  }, [addSideToast]);
+
+  const handleTranslationApprovalRequest = useCallback((language: string, timestamp: number) => {
+    setPeerTranslationRequestLang({ language, timestamp });
+  }, []);
+
+  const handleTranslationApprovalResponse = useCallback((isApproved: boolean, timestamp: number) => {
+    setPendingTranslation((prev) => {
+      if (prev && prev.timestamp === timestamp) {
+        if (isApproved) {
+          if (codeEditorRef.current) {
+            codeEditorRef.current.setCode(prev.code);
+            codeEditorRef.current.broadcastTranslation(prev.language);
+          }
+        } else {
+          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
+        }
+        return null;
+      }
+      return prev;
+    });
+  }, []);
+
+  // Language Change Handlers
+  const handleLanguageSelect = (lang: string) => {
+    setShowLanguageDropdown(false);
+    if (lang === currentLanguage) return;
+    const timestamp = Date.now();
+    setPendingLanguageChange({ language: lang, timestamp });
+    if (codeEditorRef.current) {
+        codeEditorRef.current.broadcastLanguageRequest(lang);
+    }
+  };
+
+  const handleLanguageChangeRequest = useCallback((language: string) => {
+      setPeerLanguageRequestLang(language);
+      setShowLanguageRequestModal(true);
+  }, []);
+
+  const handleLanguageChangeApproved = useCallback((language: string) => {
+      setPendingLanguageChange(null);
+      setCurrentLanguage(language);
+      addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
+  }, [addSideToast]);
+
+  const handleLanguageChangeResponse = useCallback((isApproved: boolean) => {
+      setPendingLanguageChange(null);
+      if (!isApproved) {
+          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
+      }
+  }, [addSideToast]);
+
+  const handleLanguageRequestReject = () => {
+    if (codeEditorRef.current) {
+        codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
+    }
+    setPeerLanguageRequestLang(null);
+    setShowLanguageRequestModal(false);
+  };
+
+  const handleLanguageRequestApprove = async () => {
+      const targetLang = peerLanguageRequestLang;
+      setPeerLanguageRequestLang(null);
+      setShowLanguageRequestModal(false);
+      if (!targetLang) return;
+      
+      setCurrentLanguage(targetLang);
+
+      if (codeEditorRef.current) {
+         codeEditorRef.current.broadcastLanguageApproved(targetLang);
+      }
+
+      try {
+        await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
+           method: 'PATCH',
+           headers: { 'Content-Type': 'application/json' },
+           credentials: 'include',
+           body: JSON.stringify({ language: targetLang })
+        });
+      } catch (err) {
+        console.error('Failed to save language change', err);
+      }
+  };
+
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
   const partnerDifficulty = formatDifficultyLabel(
     state?.peerRequestedDifficulty ?? undefined,
@@ -291,6 +498,12 @@ export const Workspace: React.FC = () => {
         : null;
 
   const showMatchBanner = Boolean(state?.peerUserId);
+
+  // filter out the current language from the translate dropdown
+  const currentLangKey = currentLanguage.toLowerCase();
+  const translateLanguages = SUPPORTED_LANGUAGES.filter(
+    l => l.value !== currentLangKey && l.value !== (currentLangKey === 'c++' ? 'cpp' : currentLangKey)
+  );
 
   return (
     <div className="workspace-layout">
@@ -474,13 +687,64 @@ export const Workspace: React.FC = () => {
             <div className="editor-tabs">
               <button className="editor-tab active">
                 <Code2 className="h-4 w-4 mr-2" />
-                solution{getFileExtension(state?.programmingLanguage)}
+                solution{getFileExtension(currentLanguage)}
               </button>
             </div>
             <div className="editor-actions">
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
+              {/* Translate Code Button */}
+              <div className="translate-container" ref={translateDropdownRef}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTranslateDropdown(!showTranslateDropdown)}
+                  disabled={isTranslating}
+                  className="translate-btn"
+                >
+                  {isTranslating ? (
+                    <Loader2 className="h-4 w-4 mr-2 translate-spinner" />
+                  ) : (
+                    <Languages className="h-4 w-4 mr-2" />
+                  )}
+                  {isTranslating ? "Translating..." : "Translate Code"}
+                  {!isTranslating && <ChevronDown className="h-3 w-3 ml-1" />}
+                </Button>
+
+                {showTranslateDropdown && (
+                  <div className="translate-dropdown">
+                    <div className="translate-dropdown__header">Translate to:</div>
+                    {translateLanguages.map((lang) => (
+                      <button
+                        key={lang.value}
+                        className="translate-dropdown__item"
+                        onClick={() => handleTranslate(lang.value)}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="translate-container" ref={languageDropdownRef}>
+                <Button variant="ghost" size="sm" onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+                {showLanguageDropdown && (
+                  <div className="translate-dropdown">
+                    <div className="translate-dropdown__header">Change Language:</div>
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang.value}
+                        className="translate-dropdown__item"
+                        onClick={() => handleLanguageSelect(lang.value)}
+                        style={{ fontWeight: currentLanguage === lang.value ? 'bold' : 'normal' }}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Button size="sm" className="ml-2">
                 <Play className="h-4 w-4 mr-2" />
                 Run Code
@@ -501,13 +765,20 @@ export const Workspace: React.FC = () => {
               </div>
             ) : !hasSessionEnded ? (
               <CodeEditor
+                ref={codeEditorRef}
                 value={code}
                 onChange={(val) => setCode(val || "")}
-                language={state?.programmingLanguage || 'javascript'}
+                language={currentLanguage}
                 currentUser={currentUser}
                 sessionId={sessionId}
                 onSystemTerminate={handleSystemTerminate}
                 onPartnerPresenceChange={handlePartnerPresenceChange}
+                onPeerTranslation={handlePeerTranslation}
+                onLanguageChangeRequest={handleLanguageChangeRequest}
+                onLanguageChangeApproved={handleLanguageChangeApproved}
+                onLanguageChangeResponse={handleLanguageChangeResponse}
+                onTranslationApprovalRequest={handleTranslationApprovalRequest}
+                onTranslationApprovalResponse={handleTranslationApprovalResponse}
               />
             ) : null}
           </div>
@@ -530,20 +801,153 @@ export const Workspace: React.FC = () => {
         <MessageSquare className="h-6 w-6" />
       </button>
 
+      {/* Side Toasts */}
+      <div style={{ position: 'fixed', top: '80px', right: '1.5rem', zIndex: 9500, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {sideToasts.map(toast => (
+          <div key={toast.id} className="translation-notification__content" style={{ borderLeft: `3px solid ${toast.border}`, animation: 'slideInRight 0.35s ease-out' }}>
+            <span className="translation-notification__icon">{toast.icon}</span>
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Translation Modal */}
+      <TranslationModal
+        translatedCode={translationResult}
+        targetLanguage={translationTargetLang}
+        onReject={handleTranslationReject}
+        onApprove={handleTranslationApprove}
+        isVisible={showTranslationModal}
+      />
+
       {/* Disconnection Modal */}
       {showDisconnectModal && !partnerOnline && !hasSessionEnded && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Peer Disconnected!</h2>
-            <p style={{ marginBottom: '1.5rem', color: '#444' }}>
-              Your peer got disconnected. This session will be closed in 2 minutes to free up resources.<br /><br />
-              You can either Wait for them to reconnect, or end this session and Return to your Dashboard.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <Button variant="ghost" theme="user" onClick={() => setShowDisconnectModal(false)}>Wait</Button>
-              <Button variant="solid" theme="user" onClick={() => void handleEndSessionInstantly()}>Return to Dashboard</Button>
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '500px', textAlign: 'center' }}>
+            <div className="translation-modal__header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <h2 className="translation-modal__title" style={{ fontSize: '1.25rem', color: 'var(--accent-danger, #e53e3e)' }}>Peer Disconnected!</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p style={{ marginBottom: '1rem' }}>
+                Your peer got disconnected. This session will be closed in 2 minutes to free up resources.
+              </p>
+              <p>
+                You can either Wait for them to reconnect, or end this session and Return to your Dashboard.
+              </p>
+            </div>
+            <div className="translation-modal__actions" style={{ justifyContent: 'center' }}>
+              <button className="translation-modal__btn translation-modal__btn--reject" onClick={() => setShowDisconnectModal(false)}>
+                Wait
+              </button>
+              <button className="translation-modal__btn translation-modal__btn--approve" onClick={() => void handleEndSessionInstantly()}>
+                Return to Dashboard
+              </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* End Session Modal */}
+      {showEndSessionModal && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">End Session</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>This will end the session for both peers. Are you sure you want to end this session?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={() => setShowEndSessionModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                style={{ backgroundColor: 'var(--accent-danger, #e53e3e)' }}
+                onClick={() => {
+                  setShowEndSessionModal(false);
+                  void handleEndSessionInstantly();
+                }}
+              >
+                End Session
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Language Change Request Modal */}
+      {showLanguageRequestModal && peerLanguageRequestLang && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Language Change Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to change the current programming language to <strong>{SUPPORTED_LANGUAGES.find(l => l.value === peerLanguageRequestLang.toLowerCase())?.label || peerLanguageRequestLang}</strong>.</p>
+              <p style={{ marginTop: '0.5rem', opacity: 0.8 }}>Do you approve this change?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={handleLanguageRequestReject}
+              >
+                Reject
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={handleLanguageRequestApprove}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Translation Approval Request Modal */}
+      {peerTranslationRequestLang && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Translation Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to use AI to translate this code into <strong>{peerTranslationRequestLang.language}</strong>.</p>
+              <p style={{ marginTop: '0.5rem', opacity: 0.8 }}>Do you approve this change?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={() => {
+                  codeEditorRef.current?.broadcastTranslationApprovalResponse(false, peerTranslationRequestLang.timestamp);
+                  setPeerTranslationRequestLang(null);
+                }}
+              >
+                Reject
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={() => {
+                  codeEditorRef.current?.broadcastTranslationApprovalResponse(true, peerTranslationRequestLang.timestamp);
+                  setPeerTranslationRequestLang(null);
+                }}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waiting Indicator */}
+      {(pendingTranslation || pendingLanguageChange) && (
+        <div className="waiting-indicator">
+          <Loader2 className="h-4 w-4 translate-spinner" />
+          <span>Waiting for peer approval...</span>
         </div>
       )}
     </div>
