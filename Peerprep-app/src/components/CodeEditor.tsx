@@ -49,7 +49,7 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
 
     const onPeerTranslationRef = useRef(onPeerTranslation);
     onPeerTranslationRef.current = onPeerTranslation;
-    
+
     const onLanguageChangeRequestRef = useRef(onLanguageChangeRequest);
     onLanguageChangeRequestRef.current = onLanguageChangeRequest;
 
@@ -410,7 +410,6 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
                     minimap: { enabled: false },
                     fontSize: 14,
                     wordWrap: 'on',
-                    lineNumbersMinChars: 3,
                     scrollBeyondLastLine: false,
                     padding: { top: 16 },
                     quickSuggestions: true,
