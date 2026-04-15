@@ -25,7 +25,7 @@ router.get("/user/auth/github", (req: Request, res: Response) => {
   const baseUrl = process.env.BASE_URL || "";
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: `${baseUrl}/user/user/login`, 
+    redirect_uri: `${baseUrl}/user/user/login`,
     scope: "user:email",
   };
 
