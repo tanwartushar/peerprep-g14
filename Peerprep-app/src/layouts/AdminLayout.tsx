@@ -6,7 +6,15 @@ import Sidebar from "../components/Sidebar";
 import { Header } from "../components/Header";
 import { useAuth } from "../context/AuthContext";
 
-const AdminLayout: React.FC = () => {
+type LayoutProps = {
+  showHeader?: boolean;
+  showSidebar?: boolean;
+};
+
+const AdminLayout: React.FC<LayoutProps> = ({
+  showHeader = true,
+  showSidebar = true,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout, userRole } = useAuth();
@@ -15,6 +23,10 @@ const AdminLayout: React.FC = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleProfile = async () => {
+    navigate("/profile");
+  };
 
   const handleLogout = async () => {
     try {
@@ -78,24 +90,29 @@ const AdminLayout: React.FC = () => {
       isSidebarOpen={isSidebarOpen}
       onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       sidebar={
-        <Sidebar
-          theme="admin"
-          isOpen={isSidebarOpen}
-          topItems={topItems}
-          bottomItems={bottomItems}
-        />
+        showSidebar ? (
+          <Sidebar
+            theme="admin"
+            isOpen={isSidebarOpen}
+            topItems={topItems}
+            bottomItems={bottomItems}
+          />
+        ) : null
       }
       header={
-        <Header
-          theme="admin"
-          showToggle
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          showProfile
-          showProfileName
-          showProfilePicture
-          pageName={pageName}
-        />
+        showHeader ? (
+          <Header
+            theme="admin"
+            showToggle={showSidebar}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+            showProfile
+            onClickProfile={handleProfile}
+            showProfileName
+            showProfilePicture
+            pageName={pageName}
+          />
+        ) : null
       }
     >
       <Outlet />

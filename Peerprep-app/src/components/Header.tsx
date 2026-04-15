@@ -3,7 +3,6 @@ import "./Header.css";
 import { Menu, UserIcon } from "lucide-react";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { Spinner } from "./Spinner";
-import { Button } from "./Button";
 
 type HeaderTheme = "user" | "admin";
 
@@ -13,6 +12,7 @@ interface AppShellHeaderProps {
   isSidebarOpen?: boolean;
   onToggleSidebar?: () => void;
   showProfile?: boolean;
+  onClickProfile?: () => void;
   showProfileName?: boolean;
   showProfilePicture?: boolean;
   pageName?: string;
@@ -25,6 +25,7 @@ export const Header: React.FC<AppShellHeaderProps> = ({
   isSidebarOpen = false,
   onToggleSidebar,
   showProfile = true,
+  onClickProfile,
   showProfileName = true,
   showProfilePicture = true,
   pageName = "",
@@ -32,7 +33,8 @@ export const Header: React.FC<AppShellHeaderProps> = ({
 }) => {
   const { data: user, isLoading: profileLoading } = useCurrentUserProfile();
 
-  const displayName = theme === "admin" ? (user?.name ?? "Admin") : (user?.name ?? "User Name");
+  const displayName =
+    theme === "admin" ? (user?.name ?? "Admin") : (user?.name ?? "User Name");
 
   return (
     <div
@@ -76,9 +78,13 @@ export const Header: React.FC<AppShellHeaderProps> = ({
                 )}
 
                 {showProfilePicture && (
-                  <div className="app-shell-header__profile-picture">
+                  <button
+                    type="button"
+                    className="app-shell-header__profile-picture"
+                    onClick={onClickProfile}
+                  >
                     <UserIcon className="h-5 w-5" />
-                  </div>
+                  </button>
                 )}
               </>
             )}
