@@ -40,7 +40,7 @@ PeerPrep is a microservices-based web application that matches students for real
 | Yjs + y-monaco + y-websocket | Real-time collaboration | Yjs is a CRDT library that enables conflict-free concurrent editing without a central server deciding merge order; y-monaco binds it directly to the editor |
 | React Router DOM | Client-side routing | Hash-based routing for SPA navigation with role-based protected routes |
 | TanStack React Query | Server state management | Handles caching, background refetching, and loading/error states for API calls |
-| Firebase | Authentication provider | Provides Google OAuth integration on the frontend |
+| Supabase | Authentication provider | Provides Github OAuth integration on the frontend |
 
 ### Backend
 
@@ -49,6 +49,7 @@ PeerPrep is a microservices-based web application that matches students for real
 | Node.js + Express | Auth, User, Matching, Collaboration, AI services | Lightweight and well-suited for I/O-heavy microservices; large middleware ecosystem (JWT, CORS, proxy) |
 | Go + Gin | Question and Code Execution services | High performance for CPU-bound work (code execution orchestration); strong concurrency primitives (goroutines, channels) for managing parallel container executions |
 | PostgreSQL (Supabase) | Relational data (users, match requests, sessions) | ACID transactions for match state management; Prisma ORM provides type-safe queries and migrations |
+| Firebase | Storage question of images | Easy to setup and lightweight |
 | MongoDB Atlas | Document data (questions, test cases, completions) | Flexible schema for questions with varying fields; `$addToSet` and `$inc` atomic operators simplify completion tracking |
 | Redis | Caching | In-memory caching of frequently matched questions reduces MongoDB load on the hot path |
 | RabbitMQ | Asynchronous messaging | Decouples matching from session creation; topic exchange enables event-driven architecture without tight coupling |
