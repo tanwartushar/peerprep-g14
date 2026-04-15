@@ -234,6 +234,9 @@ services:
 
     # --- CHAT SERVICE ---
   chat-service:
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
     build:
       context: ./services/chat-service
       dockerfile: Dockerfile.dev

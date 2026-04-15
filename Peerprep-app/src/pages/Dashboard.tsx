@@ -23,7 +23,6 @@ import {
   loadMatchFormDraft,
   saveMatchFormDraft,
 } from "../matching/matchFormDraft";
-import SessionChat from "../components/SessionChat";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -423,7 +422,6 @@ export const Dashboard: React.FC = () => {
             <div className="stat-number">12</div>
           </Card>
         </div>
-        <SessionChat channelId="session_123" />
       </div>
     </div>
   );
