@@ -63,6 +63,14 @@ type CompletedRecord struct {
 	CompletedQuestion []string      `json:"completedQuestion" bson:"CompletedQuestion"`
 }
 
+type TestCase struct {
+	ID             bson.ObjectID          `json:"_id,omitempty" bson:"_id,omitempty"`
+	FunctionToCall string                 `json:"function_to_call" bson:"function_to_call"`
+	InputParams    map[string]interface{} `json:"input_params" bson:"input_params"`
+	QuestionID     string                 `json:"question_id" bson:"question_id"`
+	ExpectedOutput string                 `json:"expected_output" bson:"expected_output"`
+}
+
 type MarkCompletedParams struct {
 	UserIds    []string `json:"userIds"`
 	QuestionId string   `json:"questionId"`
@@ -422,6 +430,29 @@ func (q *QuestionService) QueryTop5MatchedQuestions(client *mongo.Client) ([]Que
 		questions = []Question{}
 	}
 	return questions, nil
+}
+
+// GetTestCasesByQuestionID returns all test cases for a given question ID.
+// Note: question_id is stored as a string in MongoDB, not an ObjectID.
+func (q *QuestionService) GetTestCasesByQuestionID(questionId string, client *mongo.Client) ([]TestCase, error) {
+	testcaseColl := client.Database("questionTestcaseDB").Collection(test_col)
+
+	cursor, err := testcaseColl.Find(context.TODO(), bson.M{"question_id": questionId})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.TODO())
+
+	var testcases []TestCase
+	if err = cursor.All(context.TODO(), &testcases); err != nil {
+		return nil, err
+	}
+
+	if testcases == nil {
+		testcases = []TestCase{}
+	}
+
+	return testcases, nil
 }
 
 // MarkQuestionsCompleted adds questionId to each user's CompletedQuestion array

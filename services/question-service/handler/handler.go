@@ -110,6 +110,19 @@ func (h *Handler) DeleteQuestionRequest(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Question deleted successfully"})
 }
 
+// GetTestCasesByQuestionIDRequest returns all test cases for a given question.
+func (h *Handler) GetTestCasesByQuestionIDRequest(c *gin.Context) {
+	questionId := c.Param("questionId")
+
+	testcases, err := h.QuestSvc.GetTestCasesByQuestionID(questionId, h.DB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch test cases"})
+		return
+	}
+
+	c.JSON(http.StatusOK, testcases)
+}
+
 // GetAvailableQuestionsRequest returns questions excluding those completed by given users.
 // It checks the Redis cache of top-matched questions first, falling back to MongoDB.
 func (h *Handler) GetAvailableQuestionsRequest(c *gin.Context) {

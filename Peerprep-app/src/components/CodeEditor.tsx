@@ -15,11 +15,12 @@ interface CodeEditorProps {
     currentUser?: { name: string; color: string };
     onSystemTerminate?: (reason: string) => void;
     onPartnerPresenceChange?: (isPresent: boolean) => void;
+    onYdocReady?: (ydoc: Y.Doc) => void;
 }
 
 const PEER_ENDED_MSG = 'This Session has been ended by a peer. Returning to Dashboard.';
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange, onYdocReady }) => {
     const { userId } = useAuth();
     const editorRef = useRef<any>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
@@ -62,8 +63,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
 
         const ydoc = new Y.Doc();
         ydocRef.current = ydoc;
+        onYdocReady?.(ydoc);
 
-        // const wsUrl = 'ws://localhost/api/collaboration/ws'; 
+        // const wsUrl = 'ws://localhost/api/collaboration/ws';
         const wsUrl = 'https://backend-server-kppd.onrender.com/api/collaboration/ws';
 
         const provider = new WebsocketProvider(wsUrl, sessionId, ydoc, {

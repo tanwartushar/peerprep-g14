@@ -55,7 +55,12 @@ func main() {
 	// available questions (excludes completed) — must be before /:id
 	r.GET("/available", h.GetAvailableQuestionsRequest)
 	r.POST("/completed", h.PostMarkCompletedRequest)
-	//curl.exe -X GET http://localhost:3002/69a4454453ab6df3d3679d65
+
+	// test cases for a question — must be before /:id
+	//curl.exe -X POST "http://localhost:3002/testcases/69df1c439856683bad005164"
+	r.GET("/testcases/:questionId", h.GetTestCasesByQuestionIDRequest)
+
+	//curl.exe -X GET http://localhost:3002/69df1c439856683bad005164
     r.GET("/:id", h.GetQuestionByIDRequest)
 
     // admin only routes
