@@ -20,6 +20,20 @@ function matchingFetchInit(init: RequestInit = {}): RequestInit {
   };
 }
 
+export type FallbackSuggestionAction =
+  | { type: "update_request"; patch: { allowLowerDifficultyMatch: boolean } }
+  | { type: "create_new_request"; newCriteria: { topic: string } };
+
+export type FallbackSuggestion = {
+  type:
+    | "enable_downward_matching"
+    | "switch_topic_nearby"
+    | "switch_topic_popular";
+  title: string;
+  description: string;
+  action: FallbackSuggestionAction;
+};
+
 export type MatchRequestResponse = {
   id: string;
   userId: string;
@@ -57,6 +71,10 @@ export type MatchRequestResponse = {
   matchTimeoutSeconds: number;
   createdAt: string;
   updatedAt: string;
+  /** Server-side wait duration when status is PENDING (connected). */
+  waitTimeMs?: number;
+  /** Advisory; accept via `acceptFallbackSuggestion`. */
+  fallbackSuggestions?: FallbackSuggestion[];
 };
 
 export async function createMatchRequest(body: {
@@ -287,6 +305,49 @@ export async function getMatchRequest(
   try {
     const err = (await res.json()) as { error?: string };
     if (err.error) message = err.error;
+  } catch {
+    /* ignore */
+  }
+  return { ok: false, status: res.status, message };
+}
+
+/** User explicitly accepts an opt-in fallback (downward matching or topic switch). */
+export async function acceptFallbackSuggestion(
+  requestId: string,
+  body:
+    | { type: "enable_downward_matching" }
+    | { type: "switch_topic_nearby"; topic: string }
+    | { type: "switch_topic_popular"; topic: string },
+): Promise<
+  { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
+> {
+  const prefix = getMatchingApiPrefix();
+  const url = `${prefix}/requests/${encodeURIComponent(requestId)}/accept-fallback`;
+
+  let res: Response;
+  try {
+    res = await fetch(
+      url,
+      matchingFetchInit({
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    );
+  } catch (e) {
+    const hint = e instanceof Error ? e.message : "Network error";
+    return { ok: false, status: 0, message: hint };
+  }
+
+  if (res.ok) {
+    const data = (await res.json()) as MatchRequestResponse;
+    return { ok: true, data };
+  }
+
+  let message = res.statusText;
+  try {
+    const err = (await res.json()) as { error?: string; details?: string[] };
+    if (err.error) message = err.error;
+    else if (err.details?.length) message = err.details.join("; ");
   } catch {
     /* ignore */
   }

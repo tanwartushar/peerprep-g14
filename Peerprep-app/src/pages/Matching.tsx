@@ -6,12 +6,14 @@ import "./Matching.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
 import {
+  acceptFallbackSuggestion,
   cancelMatchRequest,
   disconnectMatchRequestKeepalive,
   getActiveMatchRequest,
   getMatchRequest,
   getMatchRequestSseUrl,
   reconnectMatchRequest,
+  type FallbackSuggestion,
   type MatchRequestResponse,
 } from "../api/matching";
 import {
@@ -29,8 +31,12 @@ interface LocationState {
   requestId?: string;
 }
 
-/** Rare GET when SSE is primary — catches silent proxy drops. */
-const SSE_FALLBACK_POLL_MS = 45_000;
+/**
+ * Refetch `GET /requests/:id` while waiting. SSE does not push when only elapsed time changes,
+ * so without this the server’s time-based suggestions (20s / 30s / 40s) would only update on
+ * rare SSE broadcasts — previously a 45s poll made everything feel “stuck until ~45s”.
+ */
+const WAITING_STATE_POLL_MS = 10_000;
 
 export const Matching: React.FC = () => {
   const navigate = useNavigate();
@@ -77,6 +83,11 @@ export const Matching: React.FC = () => {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [fallbackSuggestions, setFallbackSuggestions] = useState<
+    FallbackSuggestion[]
+  >([]);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
+  const [fallbackBusy, setFallbackBusy] = useState<string | null>(null);
   /** F8 timeout vs F9 reconnect expiry — same card layout, different copy */
   const [terminal, setTerminal] = useState<"none" | "timeout" | "reconnect">(
     "none",
@@ -220,6 +231,7 @@ export const Matching: React.FC = () => {
           d.createdAt,
           d.matchTimeoutSeconds ?? 60,
         );
+        setFallbackSuggestions(d.fallbackSuggestions ?? []);
         setReady(true);
       }
     };
@@ -252,6 +264,14 @@ export const Matching: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [terminal, ready]);
 
+  /** Hide advisory fallbacks when the wait reaches the server match cap (before TIMED_OUT may arrive). */
+  useEffect(() => {
+    if (terminal !== "none" || !ready) return;
+    if (secondsElapsed >= matchTimeoutSecRef.current) {
+      setFallbackSuggestions([]);
+    }
+  }, [secondsElapsed, ready, terminal]);
+
   /** F9 — page unload while actively waiting */
   useEffect(() => {
     if (terminal !== "none" || !ready || !requestId || !userId) {
@@ -279,6 +299,7 @@ export const Matching: React.FC = () => {
       if (cancelled) return;
       if (data.status === "TIMED_OUT") {
         clearActiveMatchRequestId();
+        setFallbackSuggestions([]);
         setTerminalMessage(
           data.message ??
             "No match was found in time. You can try again from the dashboard.",
@@ -288,6 +309,7 @@ export const Matching: React.FC = () => {
       }
       if (data.status === "RECONNECT_EXPIRED") {
         clearActiveMatchRequestId();
+        setFallbackSuggestions([]);
         setTerminalMessage(
           data.message ??
             "Your previous match request expired while disconnected. Please start a new search.",
@@ -297,10 +319,11 @@ export const Matching: React.FC = () => {
       }
       if (data.status === "MATCHED") {
         clearActiveMatchRequestId();
+        setFallbackSuggestions([]);
         navigate("/workspace", {
           replace: true,
           state: {
-            requestId,
+            requestId: data.id,
             difficulty: data.difficulty,
             topic: data.topic,
             programmingLanguage: data.programmingLanguage,
@@ -317,8 +340,27 @@ export const Matching: React.FC = () => {
       }
       if (data.status === "CANCELLED") {
         clearActiveMatchRequestId();
+        setFallbackSuggestions([]);
         navigate("/user/dashboard", { replace: true });
         return;
+      }
+      if (data.status === "PENDING") {
+        if (data.id !== requestId) {
+          setRequestId(data.id);
+          setActiveMatchRequestId(data.id);
+        }
+        setRow({
+          topic: data.topic,
+          difficulty: data.difficulty,
+          programmingLanguage: data.programmingLanguage,
+          allowLowerDifficultyMatch: data.allowLowerDifficultyMatch,
+          timeAvailableMinutes: data.timeAvailableMinutes ?? undefined,
+        });
+        setFallbackSuggestions(data.fallbackSuggestions ?? []);
+        syncWaitTimerFromServer(
+          data.createdAt,
+          data.matchTimeoutSeconds ?? 60,
+        );
       }
     };
 
@@ -373,7 +415,7 @@ export const Matching: React.FC = () => {
     connectSse();
     fallbackIntervalId = setInterval(() => {
       void runFallbackHttpPoll();
-    }, SSE_FALLBACK_POLL_MS);
+    }, WAITING_STATE_POLL_MS);
 
     return () => {
       cancelled = true;
@@ -384,6 +426,58 @@ export const Matching: React.FC = () => {
       }
     };
   }, [userId, navigate, terminal, ready, requestId]);
+
+  const handleAcceptFallback = async (s: FallbackSuggestion) => {
+    const currentId = requestId;
+    if (!currentId) return;
+    if (
+      s.type !== "enable_downward_matching" &&
+      s.action.type !== "create_new_request"
+    ) {
+      return;
+    }
+    setFallbackError(null);
+    setFallbackBusy(s.type);
+    let body:
+      | { type: "enable_downward_matching" }
+      | { type: "switch_topic_nearby"; topic: string }
+      | { type: "switch_topic_popular"; topic: string };
+    if (s.type === "enable_downward_matching") {
+      body = { type: "enable_downward_matching" };
+    } else if (s.action.type === "create_new_request") {
+      const topic = s.action.newCriteria.topic;
+      body =
+        s.type === "switch_topic_nearby"
+          ? { type: "switch_topic_nearby", topic }
+          : { type: "switch_topic_popular", topic };
+    } else {
+      setFallbackBusy(null);
+      return;
+    }
+    const result = await acceptFallbackSuggestion(currentId, body);
+    setFallbackBusy(null);
+    if (!result.ok) {
+      setFallbackError(result.message);
+      return;
+    }
+    const data = result.data;
+    if (data.id !== currentId) {
+      setRequestId(data.id);
+      setActiveMatchRequestId(data.id);
+    }
+    setRow({
+      topic: data.topic,
+      difficulty: data.difficulty,
+      programmingLanguage: data.programmingLanguage,
+      allowLowerDifficultyMatch: data.allowLowerDifficultyMatch,
+      timeAvailableMinutes: data.timeAvailableMinutes ?? undefined,
+    });
+    setFallbackSuggestions(data.fallbackSuggestions ?? []);
+    syncWaitTimerFromServer(
+      data.createdAt,
+      data.matchTimeoutSeconds ?? 60,
+    );
+  };
 
   const handleCancel = async () => {
     setCancelError(null);
@@ -522,9 +616,50 @@ export const Matching: React.FC = () => {
                   <div className="matching-timer">
                     <span className="timer-text">{formatTime(secondsElapsed)}</span>
                     <p className="timer-subtext">
-                      {`Live updates (SSE), plus a status check every ${SSE_FALLBACK_POLL_MS / 1000}s as backup.`}
+                      This page updates while you wait. If you’ve been waiting a while, we may offer
+                      optional ideas to help you find a match — you can ignore them or try one.
                     </p>
                   </div>
+
+                  {fallbackSuggestions.length > 0 ? (
+                    <div className="matching-fallback" role="region" aria-label="Optional search adjustments">
+                      <p className="matching-fallback__intro">
+                        Still waiting — optional ways to broaden your search (you choose):
+                      </p>
+                      <ul className="matching-fallback__list">
+                        {fallbackSuggestions.map((s) => (
+                          <li key={s.type} className="matching-fallback__item">
+                            <div className="matching-fallback__copy">
+                              <span className="matching-fallback__kind">
+                                {s.type === "enable_downward_matching"
+                                  ? "Lower difficulty"
+                                  : s.type === "switch_topic_nearby"
+                                    ? "Nearby topic"
+                                    : "Popular topic"}
+                              </span>
+                              <strong>{s.title}</strong>
+                              <p>{s.description}</p>
+                            </div>
+                            <Button
+                              theme="user"
+                              variant="solid"
+                              size="sm"
+                              disabled={fallbackBusy !== null || !ready}
+                              onClick={() => void handleAcceptFallback(s)}
+                            >
+                              {fallbackBusy === s.type ? "Applying…" : "Use this"}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {fallbackError ? (
+                    <p className="matching-fallback__error" role="alert">
+                      {fallbackError}
+                    </p>
+                  ) : null}
 
                   {pollError ? (
                     <p className="matching-poll-hint" role="status">

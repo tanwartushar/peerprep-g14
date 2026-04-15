@@ -28,6 +28,13 @@ import {
   publishMatchQueueWork,
   rabbitMatchQueueEnabled,
 } from "../messaging/rabbitMatchQueue.js";
+import {
+  buildFallbackSuggestions,
+  type FallbackSuggestionDTO,
+} from "./fallbackSuggestionsBuilder.js";
+import type { AcceptFallbackBody } from "../validation/acceptFallbackValidation.js";
+
+export type { FallbackSuggestionDTO };
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 type MRUpdateManyData = Prisma.MatchRequestUncheckedUpdateManyInput;
@@ -92,6 +99,10 @@ export type MatchRequestDTO = {
   matchTimeoutSeconds: number;
   createdAt: string;
   updatedAt: string;
+  /** Present when `status === "PENDING"` and connected (not in reconnect grace). */
+  waitTimeMs?: number;
+  /** Advisory only; must be explicitly accepted via `POST .../accept-fallback`. */
+  fallbackSuggestions?: FallbackSuggestionDTO[];
 };
 
 function matchingPairTypeToApi(
@@ -263,6 +274,37 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
   };
 }
 
+/**
+ * Public DTO for API/SSE: adds wait time + opt-in fallback suggestions for connected PENDING rows.
+ * Does not change matching semantics.
+ */
+async function toPublicMatchRequestDto(row: MatchRequestRow): Promise<MatchRequestDTO> {
+  const base = toDTO(row);
+  if (row.status !== "PENDING" || row.disconnectedAt !== null) {
+    return base;
+  }
+  const waitTimeMs = Date.now() - row.createdAt.getTime();
+  const timeoutSec = getMatchTimeoutSeconds();
+  const matchWindowEndMs = row.createdAt.getTime() + timeoutSec * 1000;
+  /**
+   * Past the match-wait window, the matcher will soon set `TIMED_OUT`. Do not show
+   * advisory fallbacks in this gap (or after timeout) — the search has effectively ended.
+   */
+  if (Date.now() >= matchWindowEndMs) {
+    return {
+      ...base,
+      waitTimeMs,
+      fallbackSuggestions: [],
+    };
+  }
+  const fallbackSuggestions = await buildFallbackSuggestions(row, waitTimeMs);
+  return {
+    ...base,
+    waitTimeMs,
+    fallbackSuggestions,
+  };
+}
+
 /** Read-through DTO without running the matcher (used for SSE after queue effects already ran). */
 async function loadMatchRequestDtoForUserNoSideEffect(
   id: string,
@@ -271,7 +313,7 @@ async function loadMatchRequestDtoForUserNoSideEffect(
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
   });
-  return row ? toDTO(asMatchRow(row)) : null;
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
 }
 
 async function notifyMatchRequestSseAfterQueueEffects(
@@ -482,7 +524,7 @@ export async function createMatchRequest(
     if (!refreshed) {
       throw new Error("Match request missing after create");
     }
-    return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+    return { ok: true, data: await toPublicMatchRequestDto(asMatchRow(refreshed)) };
   } catch (e) {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -503,7 +545,7 @@ export async function getMatchRequestForUser(
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
   });
-  return row ? toDTO(asMatchRow(row)) : null;
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
 }
 
 /** At most one PENDING row per user (partial unique index). */
@@ -515,7 +557,7 @@ export async function getActiveMatchRequestForUser(
   const row = await prisma.matchRequest.findFirst({
     where: { userId, status: "PENDING" } as MRWhere,
   });
-  return row ? toDTO(asMatchRow(row)) : null;
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
 }
 
 export async function disconnectMatchRequestForUser(
@@ -539,7 +581,7 @@ export async function disconnectMatchRequestForUser(
   }
 
   if (r0.disconnectedAt !== null) {
-    const d = toDTO(r0);
+    const d = await toPublicMatchRequestDto(r0);
     broadcastMatchRequestDto(id, d);
     return { ok: true, data: d };
   }
@@ -574,7 +616,7 @@ export async function disconnectMatchRequestForUser(
       return { ok: false, code: "NOT_PENDING" };
     }
     await scheduleMatchQueueRun("disconnect");
-    const dRa = toDTO(ra);
+    const dRa = await toPublicMatchRequestDto(ra);
     broadcastMatchRequestDto(id, dRa);
     return { ok: true, data: dRa };
   }
@@ -586,7 +628,7 @@ export async function disconnectMatchRequestForUser(
     return { ok: false, code: "NOT_FOUND" };
   }
   await scheduleMatchQueueRun("disconnect");
-  const dRef = toDTO(asMatchRow(refreshed));
+  const dRef = await toPublicMatchRequestDto(asMatchRow(refreshed));
   broadcastMatchRequestDto(id, dRef);
   return { ok: true, data: dRef };
 }
@@ -663,7 +705,7 @@ export async function reconnectMatchRequestForUser(
         if (!after) {
           return { ok: false, code: "NOT_FOUND" };
         }
-        const dAfter = toDTO(asMatchRow(after));
+        const dAfter = await toPublicMatchRequestDto(asMatchRow(after));
         broadcastMatchRequestDto(id, dAfter);
         return { ok: true, data: dAfter };
       }
@@ -708,7 +750,7 @@ export async function reconnectMatchRequestForUser(
       if (!after) {
         return { ok: false, code: "NOT_FOUND" };
       }
-      const dAfter2 = toDTO(asMatchRow(after));
+      const dAfter2 = await toPublicMatchRequestDto(asMatchRow(after));
       broadcastMatchRequestDto(id, dAfter2);
       return { ok: true, data: dAfter2 };
     }
@@ -726,9 +768,157 @@ export async function reconnectMatchRequestForUser(
   if (!refreshed) {
     return { ok: false, code: "NOT_FOUND" };
   }
-  const dRecon = toDTO(asMatchRow(refreshed));
+  const dRecon = await toPublicMatchRequestDto(asMatchRow(refreshed));
   broadcastMatchRequestDto(id, dRecon);
   return { ok: true, data: dRecon };
+}
+
+/**
+ * User explicitly accepts an advisory fallback. Downward: PATCH in place, preserves `createdAt`.
+ * Topic switch: cancel old PENDING row, create new (new queue position / `createdAt`).
+ */
+export async function acceptFallbackSuggestion(
+  userId: string,
+  id: string,
+  body: AcceptFallbackBody,
+): Promise<
+  | { ok: true; data: MatchRequestDTO }
+  | {
+      ok: false;
+      code:
+        | "NOT_FOUND"
+        | "NOT_PENDING"
+        | "DISCONNECTED"
+        | "NOT_APPLICABLE";
+    }
+> {
+  await scheduleMatchQueueRun("accept_fallback_pre");
+
+  const existing = await prisma.matchRequest.findFirst({
+    where: { id, userId } as MRWhere,
+  });
+  if (!existing) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  const row = asMatchRow(existing);
+  if (row.status !== "PENDING") {
+    return { ok: false, code: "NOT_PENDING" };
+  }
+  if (row.disconnectedAt !== null) {
+    return { ok: false, code: "DISCONNECTED" };
+  }
+
+  const timeoutSec = getMatchTimeoutSeconds();
+  if (Date.now() >= row.createdAt.getTime() + timeoutSec * 1000) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+
+  const waitTimeMs = Date.now() - row.createdAt.getTime();
+  const suggestions = await buildFallbackSuggestions(row, waitTimeMs);
+
+  if (body.type === "enable_downward_matching") {
+    const allowed =
+      suggestions.some((s) => s.type === "enable_downward_matching") ||
+      row.allowLowerDifficultyMatch;
+    if (!allowed) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    if (row.allowLowerDifficultyMatch) {
+      const fresh = await prisma.matchRequest.findFirst({
+        where: { id, userId } as MRWhere,
+      });
+      if (!fresh) {
+        return { ok: false, code: "NOT_FOUND" };
+      }
+      const dto = await toPublicMatchRequestDto(asMatchRow(fresh));
+      broadcastMatchRequestDto(id, dto);
+      return { ok: true, data: dto };
+    }
+
+    const updated = await prisma.matchRequest.updateMany({
+      where: {
+        id,
+        userId,
+        status: "PENDING",
+        disconnectedAt: null,
+        allowLowerDifficultyMatch: false,
+      } as MRWhere,
+      data: { allowLowerDifficultyMatch: true } as MRUpdateManyData,
+    });
+    if (updated.count === 0) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    await scheduleMatchQueueRun("accept_fallback_downward");
+    const refreshed = await prisma.matchRequest.findFirst({
+      where: { id, userId } as MRWhere,
+    });
+    if (!refreshed) {
+      return { ok: false, code: "NOT_FOUND" };
+    }
+    const dto = await toPublicMatchRequestDto(asMatchRow(refreshed));
+    broadcastMatchRequestDto(id, dto);
+    return { ok: true, data: dto };
+  }
+
+  const topic = body.topic;
+  const suggestion = suggestions.find(
+    (s) =>
+      s.type === body.type &&
+      s.action.type === "create_new_request" &&
+      s.action.newCriteria.topic === topic,
+  );
+  if (!suggestion) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+
+  const createdRow = await prisma.$transaction(async (tx) => {
+    const cur = await tx.matchRequest.findFirst({
+      where: {
+        id,
+        userId,
+        status: "PENDING",
+        disconnectedAt: null,
+      } as MRWhere,
+    });
+    if (!cur) {
+      return null;
+    }
+    const c = asMatchRow(cur);
+    await tx.matchRequest.updateMany({
+      where: { id, userId, status: "PENDING" } as MRWhere,
+      data: {
+        status: "CANCELLED",
+        disconnectedAt: null,
+        reconnectDeadlineAt: null,
+      } as unknown as MRUpdateManyData,
+    });
+    return tx.matchRequest.create({
+      data: {
+        userId,
+        topic,
+        difficulty: c.difficulty,
+        programmingLanguage: c.programmingLanguage,
+        allowLowerDifficultyMatch: c.allowLowerDifficultyMatch,
+        ...(c.timeAvailableMinutes != null
+          ? { timeAvailableMinutes: c.timeAvailableMinutes }
+          : {}),
+        status: "PENDING",
+      } as MRCreateData,
+    });
+  });
+
+  if (!createdRow) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+
+  await publishMatchRequestCancelled(id, userId);
+  await publishMatchRequestCreated(asMatchRow(createdRow));
+  await scheduleMatchQueueRun("accept_fallback_topic_switch");
+
+  const newId = createdRow.id;
+  const dto = await toPublicMatchRequestDto(asMatchRow(createdRow));
+  broadcastMatchRequestDto(newId, dto);
+  return { ok: true, data: dto };
 }
 
 export async function cancelMatchRequestForUser(

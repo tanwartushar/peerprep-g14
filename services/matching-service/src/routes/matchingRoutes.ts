@@ -4,6 +4,7 @@ import {
   parseCreateMatchRequestBody,
 } from "../validation/matchRequestValidation.js";
 import {
+  acceptFallbackSuggestion,
   cancelMatchRequestForUser,
   createMatchRequest,
   disconnectMatchRequestForUser,
@@ -11,6 +12,10 @@ import {
   getMatchRequestForUser,
   reconnectMatchRequestForUser,
 } from "../services/matchRequestService.js";
+import {
+  AcceptFallbackValidationError,
+  parseAcceptFallbackBody,
+} from "../validation/acceptFallbackValidation.js";
 import { requireUserId } from "../middleware/requireUserId.js";
 import {
   matchingCreateLimiter,
@@ -151,6 +156,55 @@ router.get(
       }
       res.status(200).json(row);
     } catch (e) {
+      sendMatchingServerError(req, res, e);
+    }
+  },
+);
+
+router.post(
+  "/requests/:id/accept-fallback",
+  requireUserId,
+  matchingGeneralLimiter,
+  async (req: Request, res: Response) => {
+    const userId = req.userId!;
+    const id = req.params["id"];
+    if (typeof id !== "string") {
+      res.status(400).json({ error: "Invalid request id" });
+      return;
+    }
+    try {
+      const body = parseAcceptFallbackBody(req.body);
+      const result = await acceptFallbackSuggestion(userId, id, body);
+      if (result.ok) {
+        res.status(200).json(result.data);
+        return;
+      }
+      if (result.code === "NOT_FOUND") {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+      if (result.code === "NOT_PENDING") {
+        res.status(409).json({
+          error: "Only an active waiting match request can be updated",
+        });
+        return;
+      }
+      if (result.code === "DISCONNECTED") {
+        res.status(409).json({
+          error:
+            "Reconnect your session before changing search options, or cancel from the dashboard.",
+        });
+        return;
+      }
+      res.status(409).json({
+        error:
+          "This suggestion is no longer available. Refresh the page for updated options.",
+      });
+    } catch (e) {
+      if (e instanceof AcceptFallbackValidationError) {
+        res.status(400).json({ error: "Validation failed", details: e.issues });
+        return;
+      }
       sendMatchingServerError(req, res, e);
     }
   },
