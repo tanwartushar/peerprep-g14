@@ -14,10 +14,12 @@ import {
   Languages,
   Loader2,
   ChevronDown,
+  Lightbulb,
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
 import { TranslationModal } from "../components/TranslationModal";
+import { ExplainModal } from "../components/ExplainModal";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { useAuth } from "../context/AuthContext";
 import "./Workspace.css";
@@ -125,9 +127,9 @@ export const Workspace: React.FC = () => {
   const [showLanguageRequestModal, setShowLanguageRequestModal] = useState(false);
 
   // Translation state
-  const [pendingTranslation, setPendingTranslation] = useState<{code: string, language: string, timestamp: number} | null>(null);
-  const [pendingLanguageChange, setPendingLanguageChange] = useState<{language: string, timestamp: number} | null>(null);
-  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{language: string, timestamp: number} | null>(null);
+  const [pendingTranslation, setPendingTranslation] = useState<{ code: string, language: string, timestamp: number } | null>(null);
+  const [pendingLanguageChange, setPendingLanguageChange] = useState<{ language: string, timestamp: number } | null>(null);
+  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{ language: string, timestamp: number } | null>(null);
 
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const [showTranslateDropdown, setShowTranslateDropdown] = useState(false);
@@ -137,14 +139,19 @@ export const Workspace: React.FC = () => {
   const [showTranslationModal, setShowTranslationModal] = useState(false);
   const translateDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Explain state
+  const [isExplaining, setIsExplaining] = useState(false);
+  const [explanationResult, setExplanationResult] = useState<string>("");
+  const [showExplainModal, setShowExplainModal] = useState(false);
+
   const [sideToasts, setSideToasts] = useState<Array<{ id: number, message: React.ReactNode, icon: string, border: string }>>([]);
 
   const addSideToast = useCallback((message: React.ReactNode, icon: string = 'ℹ️', border: string = 'var(--user-400)') => {
-      const id = Date.now() + Math.random();
-      setSideToasts(prev => [...prev, { id, message, icon, border }]);
-      setTimeout(() => {
-          setSideToasts(prev => prev.filter(t => t.id !== id));
-      }, 12000);
+    const id = Date.now() + Math.random();
+    setSideToasts(prev => [...prev, { id, message, icon, border }]);
+    setTimeout(() => {
+      setSideToasts(prev => prev.filter(t => t.id !== id));
+    }, 12000);
   }, []);
 
   const endSessionOnce = React.useCallback(
@@ -171,113 +178,65 @@ export const Workspace: React.FC = () => {
 
     const computeId = [state.requestId, state.peerMatchRequestId]
       .sort()
-      .join("-");
+      .join(":");
     setSessionId(computeId);
 
     let mounted = true;
 
     const initSession = async () => {
-      try {
-        // 1. check if session already exists
-        const sessionRes = await fetch(
-          `/api/collaboration/sessions/${computeId}`,
-          {
-            credentials: "include",
-          },
-        );
-        if (sessionRes.ok) {
-          const sessionData = await sessionRes.json();
+      let retryCount = 0;
+      const maxRetries = 15; // Wait up to 15 seconds for backend to initialize
 
-          if (sessionData.status === "terminated") {
-            if (mounted) {
-              setIsSessionLoading(false);
-              endSessionOnce("This session has ended. Returning to Dashboard.");
+      const poll = async () => {
+        if (!mounted) return;
+        try {
+          // 1. check if session already exists (initialized by backend consumer)
+          const sessionRes = await fetch(
+            `/api/collaboration/sessions/${computeId}`,
+            {
+              credentials: "include",
+            },
+          );
+
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+
+            if (sessionData.status === "terminated") {
+              if (mounted) {
+                setIsSessionLoading(false);
+                endSessionOnce("This session has ended. Returning to Dashboard.");
+              }
+              return;
             }
+
+            if (sessionData.language) {
+              setCurrentLanguage(sessionData.language);
+            }
+
+            // 2. fetch question details from questionId provided by backend
+            const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
+            if (qRes.ok) {
+              const qData = await qRes.json();
+              if (mounted) setQuestion(qData);
+            }
+            if (mounted) setIsSessionLoading(false);
             return;
           }
 
-          if (sessionData.language) {
-            setCurrentLanguage(sessionData.language);
+          if (sessionRes.status === 404 && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`[Workspace] Session not ready yet (try ${retryCount}/${maxRetries}), retrying...`);
+            setTimeout(poll, 1000);
+          } else {
+            if (mounted) setIsSessionLoading(false);
           }
-
-          // fetch question
-          const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
-          if (qRes.ok) {
-            const qData = await qRes.json();
-            if (mounted) setQuestion(qData);
-          }
-          if (mounted) setIsSessionLoading(false);
-          return;
-        }
-
-        if (sessionRes.status === 404) {
-          // 2. fetch a random question matching the topic & difficulty,
-          //    excluding questions already completed by either user
-          const formattedTopic = (state.topic || "").replace("-", "_");
-          const userParams =
-            userId && state.peerUserId
-              ? `&user1=${encodeURIComponent(userId)}&user2=${encodeURIComponent(state.peerUserId)}`
-              : "";
-          let qRes = await fetch(
-            `/api/questions/available?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}${userParams}`,
-          );
-          let selectedQ: any = null;
-
-          if (qRes.ok) {
-            const qList = await qRes.json();
-            if (qList && qList.length > 0) {
-              selectedQ = qList[0];
-            }
-          }
-
-          // fallback to match ONLY by difficulty if topic returned nothing
-          if (!selectedQ) {
-            qRes = await fetch(
-              `/api/questions/available?difficulty=${state.difficulty || "medium"}${userParams}`,
-            );
-            if (qRes.ok) {
-              const qList = await qRes.json();
-              if (qList && qList.length > 0) {
-                selectedQ = qList[0];
-              }
-            }
-          }
-
-          // fallback to ANY question if difficulty returned nothing
-          if (!selectedQ) {
-            qRes = await fetch(`/api/questions/available?${userParams.slice(1)}`);
-            if (qRes.ok) {
-              const qList = await qRes.json();
-              if (qList && qList.length > 0) {
-                selectedQ = qList[0];
-              }
-            }
-          }
-
-          if (mounted && selectedQ) setQuestion(selectedQ);
-
-          // 3. create the collaboration session
-          const createRes = await fetch(`/api/collaboration/sessions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              matchRequestId: state.requestId,
-              peerMatchRequestId: state.peerMatchRequestId,
-              questionId:
-                selectedQ?.id || selectedQ?._id || "fallback-question",
-            }),
-          });
-
-          if (!createRes.ok && createRes.status !== 409) {
-            console.error("Failed to create session", await createRes.text());
-          }
+        } catch (err) {
+          console.error("Session initialization failed:", err);
           if (mounted) setIsSessionLoading(false);
         }
-      } catch (err) {
-        console.error("Session creation failed:", err);
-        if (mounted) setIsSessionLoading(false);
-      }
+      };
+
+      void poll();
     };
 
     void initSession();
@@ -556,7 +515,11 @@ export const Workspace: React.FC = () => {
     setShowTranslationModal(false);
   };
 
+  const lastTranslationToastRef = useRef<number>(0);
   const handlePeerTranslation = useCallback((language: string) => {
+    const now = Date.now();
+    if (now - lastTranslationToastRef.current < 2000) return; // Debounce duplicate toasts
+    lastTranslationToastRef.current = now;
     addSideToast(`Code translated to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language} by your peer`, '✨', 'var(--green, #48bb78)');
   }, [addSideToast]);
 
@@ -581,6 +544,43 @@ export const Workspace: React.FC = () => {
     });
   }, []);
 
+  const handleExplainCode = async () => {
+    if (!codeEditorRef.current || isExplaining) return;
+
+    const currentCode = codeEditorRef.current.getCode();
+    if (!currentCode || currentCode.trim().length === 0) {
+      addSideToast("There is no code to explain. Write some code first.", "⚠️", "#ed8936");
+      return;
+    }
+
+    setIsExplaining(true);
+    try {
+      const questionText = question ? `${question.title}\n${question.description}` : "";
+      const res = await fetch('/api/ai/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: currentCode,
+          question: questionText,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Explanation failed');
+      }
+
+      const data = await res.json();
+      setExplanationResult(data.explanation);
+      setShowExplainModal(true);
+    } catch (err: any) {
+      addSideToast(`Explanation failed: ${err.message || 'Please try again.'}`, "❌", "#e53e3e");
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
   // Language Change Handlers
   const handleLanguageSelect = (lang: string) => {
     setShowLanguageDropdown(false);
@@ -588,58 +588,58 @@ export const Workspace: React.FC = () => {
     const timestamp = Date.now();
     setPendingLanguageChange({ language: lang, timestamp });
     if (codeEditorRef.current) {
-        codeEditorRef.current.broadcastLanguageRequest(lang);
+      codeEditorRef.current.broadcastLanguageRequest(lang);
     }
   };
 
   const handleLanguageChangeRequest = useCallback((language: string) => {
-      setPeerLanguageRequestLang(language);
-      setShowLanguageRequestModal(true);
+    setPeerLanguageRequestLang(language);
+    setShowLanguageRequestModal(true);
   }, []);
 
   const handleLanguageChangeApproved = useCallback((language: string) => {
-      setPendingLanguageChange(null);
-      setCurrentLanguage(language);
-      addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
+    setPendingLanguageChange(null);
+    setCurrentLanguage(language);
+    addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
   }, [addSideToast]);
 
   const handleLanguageChangeResponse = useCallback((isApproved: boolean) => {
-      setPendingLanguageChange(null);
-      if (!isApproved) {
-          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
-      }
+    setPendingLanguageChange(null);
+    if (!isApproved) {
+      addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
+    }
   }, [addSideToast]);
 
   const handleLanguageRequestReject = () => {
     if (codeEditorRef.current) {
-        codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
+      codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
     }
     setPeerLanguageRequestLang(null);
     setShowLanguageRequestModal(false);
   };
 
   const handleLanguageRequestApprove = async () => {
-      const targetLang = peerLanguageRequestLang;
-      setPeerLanguageRequestLang(null);
-      setShowLanguageRequestModal(false);
-      if (!targetLang) return;
-      
-      setCurrentLanguage(targetLang);
+    const targetLang = peerLanguageRequestLang;
+    setPeerLanguageRequestLang(null);
+    setShowLanguageRequestModal(false);
+    if (!targetLang) return;
 
-      if (codeEditorRef.current) {
-         codeEditorRef.current.broadcastLanguageApproved(targetLang);
-      }
+    setCurrentLanguage(targetLang);
 
-      try {
-        await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
-           method: 'PATCH',
-           headers: { 'Content-Type': 'application/json' },
-           credentials: 'include',
-           body: JSON.stringify({ language: targetLang })
-        });
-      } catch (err) {
-        console.error('Failed to save language change', err);
-      }
+    if (codeEditorRef.current) {
+      codeEditorRef.current.broadcastLanguageApproved(targetLang);
+    }
+
+    try {
+      await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ language: targetLang })
+      });
+    } catch (err) {
+      console.error('Failed to save language change', err);
+    }
   };
 
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
@@ -847,9 +847,6 @@ export const Workspace: React.FC = () => {
               </button>
             </div>
             <div className="editor-actions">
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
               <Button
                 size="sm"
                 className="ml-2"
@@ -862,6 +859,21 @@ export const Workspace: React.FC = () => {
                   <Play className="h-4 w-4 mr-2" />
                 )}
                 {execStatus === 'pending' ? 'Awaiting Approval...' : execStatus === 'running' ? 'Running...' : 'Run Code'}
+              </Button>
+              {/* Explain Code Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExplainCode}
+                disabled={isExplaining}
+                className="ml-2"
+              >
+                {isExplaining ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Lightbulb className="h-4 w-4 mr-2" style={{ color: 'var(--accent-warning, #ecc94b)' }} />
+                )}
+                {isExplaining ? "Explaining..." : "Explain"}
               </Button>
               {/* Translate Code Button */}
               <div className="translate-container" ref={translateDropdownRef}>
@@ -958,7 +970,7 @@ export const Workspace: React.FC = () => {
             </div>
             <div className="console-content" style={{ fontFamily: 'monospace', fontSize: '13px', padding: '0.75rem', overflowY: 'auto' }}>
               {execStatus === 'idle' && (
-                <span className="text-muted text-sm">Waiting for execution...</span>
+                <span className="text-muted text-sm">Run your code to see the output here</span>
               )}
               {execStatus === 'pending' && (
                 <span style={{ color: 'var(--text-secondary)' }}>
@@ -1033,15 +1045,27 @@ export const Workspace: React.FC = () => {
 
       {/* Code Execution Approval Modal */}
       {showApprovalModal && !hasSessionEnded && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Run Code Request</h2>
-            <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
-              Your peer wants to run the code. Do you approve?
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <Button variant="ghost" theme="user" onClick={handleDeclineExecution}>Decline</Button>
-              <Button variant="solid" theme="user" onClick={handleApproveExecution}>Approve</Button>
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Run Code Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to run the code. Do you approve?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={handleDeclineExecution}
+              >
+                Decline
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={handleApproveExecution}
+              >
+                Approve
+              </button>
             </div>
           </div>
         </div>
@@ -1063,6 +1087,13 @@ export const Workspace: React.FC = () => {
         onReject={handleTranslationReject}
         onApprove={handleTranslationApprove}
         isVisible={showTranslationModal}
+      />
+
+      {/* Explain Modal */}
+      <ExplainModal
+        explanation={explanationResult}
+        isVisible={showExplainModal}
+        onClose={() => setShowExplainModal(false)}
       />
 
       {/* Disconnection Modal */}
