@@ -19,6 +19,7 @@ model User {
   bio             String?
   experienceLevel String?
   learningPurpose String[]             @default([])
+  profileImagePath String?
   refreshTokens   User_refresh_token[]
 }
 
