@@ -19,6 +19,8 @@ import {
 } from "../messaging/matchingDomainEvents.js";
 import {
   findFirstPair,
+  poolKeyString,
+  type MatchPairResult,
   type MatchRequestRow as EngineMatchRequestRow,
 } from "./matchingEngine.js";
 import { broadcastMatchRequestDto } from "../sse/matchRequestSseHub.js";
@@ -303,16 +305,53 @@ export async function tryMatchQueue(): Promise<MatchQueueEffects> {
     timedOutRows.push(...expired.timedOutRows);
     reconnectExpiredPairs = expired.reconnectExpiredPairs;
 
+    /**
+     * Per-pool matching: load only `(topic, programmingLanguage)` slices (not all PENDING rows).
+     * Order matches `sortedPoolKeys` / F10.1 — same outcome as one global `findFirstPair`, less memory.
+     */
     while (true) {
-      const pendingRows = await tx.matchRequest.findMany({
-        where: { status: "PENDING" } as MRWhere,
+      const pendingPoolKeys = await tx.matchRequest.findMany({
+        where: {
+          status: "PENDING",
+          disconnectedAt: null,
+        } as MRWhere,
+        select: { topic: true, programmingLanguage: true },
+        distinct: ["topic", "programmingLanguage"],
       });
-      const pending = pendingRows
-        .map((r) => asMatchRow(r))
-        .filter((r) => r.disconnectedAt === null);
 
-      const pair = findFirstPair(pending.map(toEngineRow));
-      if (!pair) return;
+      if (pendingPoolKeys.length === 0) {
+        return;
+      }
+
+      const sortedPools = [...pendingPoolKeys].sort((x, y) =>
+        poolKeyString(x.topic, x.programmingLanguage).localeCompare(
+          poolKeyString(y.topic, y.programmingLanguage),
+        ),
+      );
+
+      let pair: MatchPairResult | null = null;
+      for (const { topic, programmingLanguage } of sortedPools) {
+        const pendingRows = await tx.matchRequest.findMany({
+          where: {
+            status: "PENDING",
+            disconnectedAt: null,
+            topic,
+            programmingLanguage,
+          } as MRWhere,
+        });
+        const pending = pendingRows
+          .map((r) => asMatchRow(r))
+          .filter((r) => r.disconnectedAt === null);
+
+        pair = findFirstPair(pending.map(toEngineRow));
+        if (pair !== null) {
+          break;
+        }
+      }
+
+      if (pair === null) {
+        return;
+      }
 
       const { requester: a, partner: b, matchingType } = pair;
 
