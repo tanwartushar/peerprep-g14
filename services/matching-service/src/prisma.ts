@@ -19,3 +19,9 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 export default prisma;
+
+/** Call after HTTP server has stopped accepting work; closes Prisma then the pg pool. */
+export async function disconnectDatabase(): Promise<void> {
+  await prisma.$disconnect();
+  await pool.end();
+}

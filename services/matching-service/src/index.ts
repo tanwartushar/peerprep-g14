@@ -1,8 +1,11 @@
 import "dotenv/config";
 import express, { type Application } from "express";
+import type { Server } from "node:http";
 import cors, { type CorsOptions } from "cors";
 import matchingRouter from "./routes/matchingRoutes.js";
 import { runReadinessChecks } from "./health/readiness.js";
+import { disconnectDatabase } from "./prisma.js";
+import { closeRabbitMq } from "./messaging/rabbitmqPublisher.js";
 
 const app: Application = express();
 const PORT = Number.parseInt(process.env.PORT ?? "3003", 10);
@@ -62,6 +65,74 @@ app.get("/ready", async (_req, res) => {
 
 app.use("/matching", matchingRouter);
 
-app.listen(PORT, () => {
+const SHUTDOWN_HTTP_MS = Number.parseInt(
+  process.env.SHUTDOWN_HTTP_MS ?? "25000",
+  10,
+);
+
+let server: Server | null = null;
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string): Promise<void> {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+  console.log(`[shutdown] ${signal} received, draining HTTP connections...`);
+
+  const httpServer = server;
+  if (!httpServer) {
+    await closeRabbitMq();
+    await disconnectDatabase();
+    process.exit(0);
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(() => {
+      console.warn(
+        `[shutdown] HTTP drain exceeded ${SHUTDOWN_HTTP_MS}ms; closing open connections`,
+      );
+      if (typeof httpServer.closeAllConnections === "function") {
+        httpServer.closeAllConnections();
+      }
+    }, SHUTDOWN_HTTP_MS);
+
+    httpServer.close((err) => {
+      clearTimeout(t);
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  }).catch((e) => {
+    console.error("[shutdown] server.close error:", e);
+  });
+
+  console.log("[shutdown] HTTP server closed; closing RabbitMQ and database...");
+  try {
+    await closeRabbitMq();
+  } catch (e) {
+    console.error("[shutdown] RabbitMQ close:", e);
+  }
+  try {
+    await disconnectDatabase();
+  } catch (e) {
+    console.error("[shutdown] database disconnect:", e);
+  }
+
+  console.log("[shutdown] cleanup complete");
+  process.exit(0);
+}
+
+process.once("SIGTERM", () => {
+  void gracefulShutdown("SIGTERM");
+});
+process.once("SIGINT", () => {
+  void gracefulShutdown("SIGINT");
+});
+
+server = app.listen(PORT, () => {
   console.log(`matching-service listening on http://localhost:${PORT}`);
 });
