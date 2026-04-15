@@ -793,48 +793,47 @@ export const Workspace: React.FC = () => {
               </pre>
             </div>
 
-            <div
-              className="workspace-question-images"
-              style={{ marginTop: "2rem" }}
-            >
-              <strong
-                style={{
-                  display: "block",
-                  marginBottom: "1rem",
-                  color: "var(--text-primary)",
-                }}
-              >
-                Reference Images:
-              </strong>
+            {question?.imageUrls && question.imageUrls.length > 0 && (
               <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "1rem",
-                }}
+                className="workspace-question-images"
+                style={{ marginTop: "2rem" }}
               >
-                {/* This is a placeholder structure for dynamic images when the backend is connected to the workspace */}
-                <div
-                  className="workspace-image-container"
+                <strong
                   style={{
-                    borderRadius: "8px",
-                    overflow: "hidden",
-                    border: "1px solid var(--border-color)",
+                    display: "block",
+                    marginBottom: "1rem",
+                    color: "var(--text-primary)",
                   }}
                 >
-                  <div
-                    style={{
-                      padding: "2rem",
-                      textAlign: "center",
-                      backgroundColor: "var(--bg-secondary)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    [Question image would be displayed here]
-                  </div>
+                  Reference Images:
+                </strong>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                  }}
+                >
+                  {question.imageUrls.map((url: string, index: number) => (
+                    <div
+                      key={index}
+                      className="workspace-image-container"
+                      style={{
+                        borderRadius: "8px",
+                        overflow: "hidden",
+                        border: "1px solid var(--border-color)",
+                      }}
+                    >
+                      <img 
+                        src={url} 
+                        alt={`Question reference ${index + 1}`} 
+                        style={{ width: '100%', display: 'block', objectFit: 'contain' }}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
+            )}
           </div>
         </section>
 
