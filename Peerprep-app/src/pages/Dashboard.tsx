@@ -23,6 +23,7 @@ import {
   loadMatchFormDraft,
   saveMatchFormDraft,
 } from "../matching/matchFormDraft";
+import SessionChat from "../components/SessionChat";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -49,13 +50,15 @@ export const Dashboard: React.FC = () => {
   const [resumeCheckDone, setResumeCheckDone] = useState(false);
   const dashboardTheme = "user";
 
-  const [topToast, setTopToast] = useState<string | null>(stateFromNav?.sessionNotification || null);
+  const [topToast, setTopToast] = useState<string | null>(
+    stateFromNav?.sessionNotification || null,
+  );
 
   useEffect(() => {
-      if (topToast) {
-         const t = setTimeout(() => setTopToast(null), 10000);
-         return () => clearTimeout(t);
-      }
+    if (topToast) {
+      const t = setTimeout(() => setTopToast(null), 10000);
+      return () => clearTimeout(t);
+    }
   }, [topToast]);
 
   useEffect(() => {
@@ -126,7 +129,8 @@ export const Dashboard: React.FC = () => {
               topic: matchRes.data.topic,
               difficulty: matchRes.data.difficulty,
               programmingLanguage: matchRes.data.programmingLanguage,
-              allowLowerDifficultyMatch: matchRes.data.allowLowerDifficultyMatch,
+              allowLowerDifficultyMatch:
+                matchRes.data.allowLowerDifficultyMatch,
               timeAvailableMinutes:
                 matchRes.data.timeAvailableMinutes ?? undefined,
             },
@@ -204,7 +208,8 @@ export const Dashboard: React.FC = () => {
               topic: existing.data.topic,
               difficulty: existing.data.difficulty,
               programmingLanguage: existing.data.programmingLanguage,
-              allowLowerDifficultyMatch: existing.data.allowLowerDifficultyMatch,
+              allowLowerDifficultyMatch:
+                existing.data.allowLowerDifficultyMatch,
               timeAvailableMinutes:
                 existing.data.timeAvailableMinutes ?? undefined,
             },
@@ -418,6 +423,7 @@ export const Dashboard: React.FC = () => {
             <div className="stat-number">12</div>
           </Card>
         </div>
+        <SessionChat channelId="session_123" />
       </div>
     </div>
   );

@@ -14,6 +14,28 @@ const upload = multer({
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+async function syncUserToStream(user: {
+  id: string;
+  name: string | null;
+  image?: string;
+}) {
+  try {
+    await fetch("http://chat-service:3007/chat/users/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        name: user.name || "User",
+        image: user.image,
+      }),
+    });
+  } catch (err) {
+    console.error("Failed to sync user to Stream:", err);
+  }
+}
+
 // Sample route
 router.get("/user/hello", (req: Request, res: Response) => {
   res.send("TypeScript Backend is running! 🚀");
@@ -90,6 +112,13 @@ router.get("/user/user/login", async (req: Request, res: Response) => {
           providerId: userData.id.toString(),
         },
       });
+
+      await syncUserToStream({
+        id: user.id,
+        name: user.name,
+        image: user.profileImagePath ?? undefined,
+      });
+
       isNewUser = true;
     } else {
       user = existingUser;
@@ -172,6 +201,7 @@ router.get("/profile/me", async (req, res) => {
         experienceLevel: true,
         learningPurpose: true,
         bio: true,
+        profileImagePath: true,
       },
     });
 
@@ -207,6 +237,11 @@ router.patch("/profile", async (req: Request, res: Response) => {
       },
     });
 
+    await syncUserToStream({
+      id: userId,
+      name: name,
+    });
+
     return res
       .status(200)
       .json({ message: "Profile updated successfully", user: updatedUser });
@@ -239,7 +274,7 @@ router.post(
 
       const existingUser = await prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, profileImagePath: true },
+        select: { id: true, name: true, profileImagePath: true },
       });
 
       if (!existingUser) {
@@ -283,6 +318,12 @@ router.post(
       await prisma.user.update({
         where: { id: userId },
         data: { profileImagePath: newPath },
+      });
+
+      await syncUserToStream({
+        id: existingUser.id,
+        name: existingUser.name,
+        image: existingUser.profileImagePath ?? undefined,
       });
 
       return res.status(200).json({

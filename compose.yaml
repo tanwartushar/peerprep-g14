@@ -141,12 +141,12 @@ services:
     platform: linux/amd64
     build:
       context: ./services/question-service
-      dockerfile: Dockerfile.prod      #use Dockerfile.prod for production
+      dockerfile: Dockerfile.prod #use Dockerfile.prod for production
     depends_on:
       - auth-service # if it depends on auth
     restart: on-failure
     volumes:
-    - ./services/question-service:/app
+      - ./services/question-service:/app
     develop:
       watch:
         - action: sync
@@ -226,6 +226,29 @@ services:
           target: /usr/src/app/src
         - action: rebuild
           path: ./services/ai-service/package.json
+
+    # --- CHAT SERVICE ---
+  chat-service:
+    build:
+      context: ./services/chat-service
+      dockerfile: Dockerfile.dev
+    container_name: chat-service
+    ports:
+      - "3007:3007"
+    env_file:
+      - ./services/chat-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/chat-service/src:/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/chat-service/src
+          target: /app/src
+        - action: rebuild
+          path: ./services/chat-service/package.json
+    restart: unless-stopped
 
 volumes:
   prometheus_data: {}
