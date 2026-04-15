@@ -38,6 +38,10 @@ async function ensureChannel(url: string): Promise<ConfirmChannel | null> {
     await channel.assertExchange(MATCHING_EVENTS_EXCHANGE, "topic", {
       durable: true,
     });
+    // Ensure consumer queues exist so messages are queued rather than dropped
+    // if the matching-service boots and publishes before consumers connect.
+    await channel.assertQueue("collaboration.match_found", { durable: true });
+    await channel.bindQueue("collaboration.match_found", MATCHING_EVENTS_EXCHANGE, "match.found");
   }
   return channel;
 }
