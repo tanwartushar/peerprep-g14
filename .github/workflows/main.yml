@@ -29,7 +29,7 @@ jobs:
           - service_name: ai-service
             folder: services/ai-service
           - service_name: code-execution-service
-            folder: services/code-execution
+            folder: services/code-execution-service
           - service_name: frontend
             folder: Peerprep-app # Matches your Peerprep-app folder
 
