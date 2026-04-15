@@ -76,5 +76,5 @@ export async function initMatchConsumer() {
 }
 
 function reconnect() {
-    setTimeout(initMatchConsumer, 5000);
+    setTimeout(initMatchConsumer, 500);
 }
