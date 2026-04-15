@@ -1,5 +1,6 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import * as Y from "yjs";
 import {
   Code2,
   Layout,
@@ -7,6 +8,9 @@ import {
   LogOut,
   MessageSquare,
   Play,
+  CheckCircle,
+  XCircle,
+  Loader,
   Languages,
   Loader2,
   ChevronDown,
@@ -15,6 +19,7 @@ import { Button } from "../components/Button";
 import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
 import { TranslationModal } from "../components/TranslationModal";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
+import { useAuth } from "../context/AuthContext";
 import "./Workspace.css";
 
 interface LocationState {
@@ -66,11 +71,14 @@ function getFileExtension(language: string | undefined): string {
   }
 }
 
+type ExecStatus = 'idle' | 'pending' | 'approved' | 'running' | 'completed' | 'rejected';
+
 export const Workspace: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState;
   const { data: profile } = useCurrentUserProfile();
+  const { userId } = useAuth();
   const currentUser = React.useMemo(() => {
     const colors = [
       "#f56565",
@@ -103,6 +111,12 @@ export const Workspace: React.FC = () => {
   const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const sessionEndedRef = React.useRef(false);
 
+  // Code execution state
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  const [execStatus, setExecStatus] = useState<ExecStatus>('idle');
+  const [execResults, setExecResults] = useState<any>(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const execObserverRef = useRef<(() => void) | null>(null);
   // Dynamic Language state
   const [currentLanguage, setCurrentLanguage] = useState(state?.programmingLanguage || 'javascript');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -197,11 +211,15 @@ export const Workspace: React.FC = () => {
         }
 
         if (sessionRes.status === 404) {
-          // 2. fetch a random question matching the topic & difficulty
-          // since question-service returns an array for list endpoints, we try exact match first
+          // 2. fetch a random question matching the topic & difficulty,
+          //    excluding questions already completed by either user
           const formattedTopic = (state.topic || "").replace("-", "_");
+          const userParams =
+            userId && state.peerUserId
+              ? `&user1=${encodeURIComponent(userId)}&user2=${encodeURIComponent(state.peerUserId)}`
+              : "";
           let qRes = await fetch(
-            `/api/questions/?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}`,
+            `/api/questions/available?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}${userParams}`,
           );
           let selectedQ: any = null;
 
@@ -215,7 +233,7 @@ export const Workspace: React.FC = () => {
           // fallback to match ONLY by difficulty if topic returned nothing
           if (!selectedQ) {
             qRes = await fetch(
-              `/api/questions/?difficulty=${state.difficulty || "medium"}`,
+              `/api/questions/available?difficulty=${state.difficulty || "medium"}${userParams}`,
             );
             if (qRes.ok) {
               const qList = await qRes.json();
@@ -227,7 +245,7 @@ export const Workspace: React.FC = () => {
 
           // fallback to ANY question if difficulty returned nothing
           if (!selectedQ) {
-            qRes = await fetch(`/api/questions/`);
+            qRes = await fetch(`/api/questions/available?${userParams.slice(1)}`);
             if (qRes.ok) {
               const qList = await qRes.json();
               if (qList && qList.length > 0) {
@@ -319,6 +337,18 @@ export const Workspace: React.FC = () => {
         credentials: 'include'
       });
     } catch (e) { }
+    // Mark question as completed for both users
+    if (question && userId && state?.peerUserId) {
+      await fetch("/api/questions/completed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          userIds: [userId, state.peerUserId],
+          questionId: question._id || question.id,
+        }),
+      }).catch(console.error);
+    }
     endSessionOnce();
   };
 
@@ -342,6 +372,132 @@ export const Workspace: React.FC = () => {
     setPartnerOnline(isPresent);
     if (!isPresent) setShowDisconnectModal(true);
     else setShowDisconnectModal(false);
+  };
+
+  // --- Code Execution: Yjs observer + handlers ---
+
+  const handleYdocReady = useCallback((doc: Y.Doc) => {
+    setYdoc(doc);
+  }, []);
+
+  const executeCode = useCallback(async (codeExecMap: Y.Map<unknown>) => {
+    if (!ydoc) return;
+    codeExecMap.set('status', 'running');
+    try {
+      const codeText = ydoc.getText('monaco').toString();
+      const res = await fetch('/api/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: codeText,
+          language: state?.programmingLanguage || 'javascript',
+          questionId: question?._id || question?.id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        codeExecMap.set('status', 'completed');
+        codeExecMap.set('results', JSON.stringify({
+          results: [],
+          stdout: '',
+          stderr: data.error || 'Execution failed',
+        }));
+      } else {
+        codeExecMap.set('status', 'completed');
+        codeExecMap.set('results', JSON.stringify(data));
+      }
+    } catch (err: any) {
+      codeExecMap.set('status', 'completed');
+      codeExecMap.set('results', JSON.stringify({
+        results: [],
+        stdout: '',
+        stderr: `Network error: ${err.message}`,
+      }));
+    }
+  }, [ydoc, state?.programmingLanguage, question]);
+
+  useEffect(() => {
+    if (!ydoc) return;
+    const codeExecMap = ydoc.getMap('codeExecution');
+
+    const observer = () => {
+      const status = codeExecMap.get('status') as ExecStatus | undefined;
+      if (!status) return;
+
+      setExecStatus(status);
+
+      if (status === 'pending') {
+        const requestedBy = codeExecMap.get('requestedBy') as string;
+        if (requestedBy !== userId) {
+          setShowApprovalModal(true);
+        }
+      } else if (status === 'approved') {
+        setShowApprovalModal(false);
+        const requestedBy = codeExecMap.get('requestedBy') as string;
+        // Only the requester sends the execute request
+        if (requestedBy === userId) {
+          void executeCode(codeExecMap);
+        }
+      } else if (status === 'running') {
+        setShowApprovalModal(false);
+      } else if (status === 'completed') {
+        setShowApprovalModal(false);
+        const resultsStr = codeExecMap.get('results') as string;
+        if (resultsStr) {
+          try {
+            setExecResults(JSON.parse(resultsStr));
+          } catch {
+            setExecResults(null);
+          }
+        }
+      } else if (status === 'rejected') {
+        setShowApprovalModal(false);
+        // Reset to idle after showing rejection briefly
+        setTimeout(() => {
+          const currentStatus = codeExecMap.get('status');
+          if (currentStatus === 'rejected') {
+            codeExecMap.set('status', 'idle');
+            setExecStatus('idle');
+          }
+        }, 3000);
+      }
+    };
+
+    codeExecMap.observe(observer);
+    execObserverRef.current = () => codeExecMap.unobserve(observer);
+
+    return () => {
+      codeExecMap.unobserve(observer);
+      execObserverRef.current = null;
+    };
+  }, [ydoc, userId, executeCode]);
+
+  const handleRunCode = () => {
+    if (!ydoc) return;
+    const codeExecMap = ydoc.getMap('codeExecution');
+    const currentStatus = codeExecMap.get('status') as string | undefined;
+    if (currentStatus === 'pending' || currentStatus === 'running') return;
+    ydoc.transact(() => {
+      codeExecMap.set('requestedBy', userId);
+      codeExecMap.set('timestamp', Date.now());
+      codeExecMap.set('status', 'pending');
+    });
+  };
+
+  const handleApproveExecution = () => {
+    if (!ydoc) return;
+    const codeExecMap = ydoc.getMap('codeExecution');
+    codeExecMap.set('status', 'approved');
+    codeExecMap.set('approvedBy', userId);
+    setShowApprovalModal(false);
+  };
+
+  const handleDeclineExecution = () => {
+    if (!ydoc) return;
+    const codeExecMap = ydoc.getMap('codeExecution');
+    codeExecMap.set('status', 'rejected');
+    setShowApprovalModal(false);
   };
 
   // translation handlers
@@ -691,6 +847,22 @@ export const Workspace: React.FC = () => {
               </button>
             </div>
             <div className="editor-actions">
+              <Button variant="ghost" size="sm">
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                className="ml-2"
+                onClick={handleRunCode}
+                disabled={execStatus === 'pending' || execStatus === 'running'}
+              >
+                {execStatus === 'running' ? (
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4 mr-2" />
+                )}
+                {execStatus === 'pending' ? 'Awaiting Approval...' : execStatus === 'running' ? 'Running...' : 'Run Code'}
+              </Button>
               {/* Translate Code Button */}
               <div className="translate-container" ref={translateDropdownRef}>
                 <Button
@@ -745,10 +917,6 @@ export const Workspace: React.FC = () => {
                   </div>
                 )}
               </div>
-              <Button size="sm" className="ml-2">
-                <Play className="h-4 w-4 mr-2" />
-                Run Code
-              </Button>
             </div>
           </div>
 
@@ -773,6 +941,7 @@ export const Workspace: React.FC = () => {
                 sessionId={sessionId}
                 onSystemTerminate={handleSystemTerminate}
                 onPartnerPresenceChange={handlePartnerPresenceChange}
+                onYdocReady={handleYdocReady}
                 onPeerTranslation={handlePeerTranslation}
                 onLanguageChangeRequest={handleLanguageChangeRequest}
                 onLanguageChangeApproved={handleLanguageChangeApproved}
@@ -787,10 +956,71 @@ export const Workspace: React.FC = () => {
             <div className="console-header">
               <span className="text-sm font-semibold">Console Output</span>
             </div>
-            <div className="console-content">
-              <span className="text-muted text-sm">
-                Waiting for execution...
-              </span>
+            <div className="console-content" style={{ fontFamily: 'monospace', fontSize: '13px', padding: '0.75rem', overflowY: 'auto' }}>
+              {execStatus === 'idle' && (
+                <span className="text-muted text-sm">Waiting for execution...</span>
+              )}
+              {execStatus === 'pending' && (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  <Loader className="h-4 w-4 inline-block mr-2 animate-spin" />
+                  Waiting for peer approval...
+                </span>
+              )}
+              {execStatus === 'running' && (
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  <Loader className="h-4 w-4 inline-block mr-2 animate-spin" />
+                  Executing code...
+                </span>
+              )}
+              {execStatus === 'rejected' && (
+                <span style={{ color: '#f56565' }}>Peer declined the execution request.</span>
+              )}
+              {execStatus === 'completed' && execResults && (
+                <div>
+                  {execResults.results && execResults.results.length > 0 ? (
+                    <div>
+                      {execResults.results.map((r: any) => (
+                        <div key={r.testCase} style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                          {r.passed ? (
+                            <CheckCircle className="h-4 w-4" style={{ color: '#48bb78', flexShrink: 0, marginTop: '2px' }} />
+                          ) : (
+                            <XCircle className="h-4 w-4" style={{ color: '#f56565', flexShrink: 0, marginTop: '2px' }} />
+                          )}
+                          <div>
+                            <span style={{ fontWeight: 600 }}>Test {r.testCase}: </span>
+                            <span style={{ color: r.passed ? '#48bb78' : '#f56565' }}>
+                              {r.passed ? 'PASSED' : 'FAILED'}
+                            </span>
+                            {!r.passed && (
+                              <div style={{ marginTop: '2px', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                                {r.error ? (
+                                  <span>Error: {r.error}</span>
+                                ) : (
+                                  <>
+                                    <div>Expected: {r.expected}</div>
+                                    <div>Actual: {r.actual}</div>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ marginTop: '0.75rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border-color)', fontWeight: 600 }}>
+                        {execResults.results.filter((r: any) => r.passed).length}/{execResults.results.length} tests passed
+                      </div>
+                    </div>
+                  ) : null}
+                  {execResults.stderr && (
+                    <div style={{ marginTop: '0.5rem', color: '#f56565', whiteSpace: 'pre-wrap' }}>
+                      {execResults.stderr}
+                    </div>
+                  )}
+                  {!execResults.results?.length && !execResults.stderr && (
+                    <span className="text-muted text-sm">No results returned.</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -801,6 +1031,21 @@ export const Workspace: React.FC = () => {
         <MessageSquare className="h-6 w-6" />
       </button>
 
+      {/* Code Execution Approval Modal */}
+      {showApprovalModal && !hasSessionEnded && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Run Code Request</h2>
+            <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+              Your peer wants to run the code. Do you approve?
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <Button variant="ghost" theme="user" onClick={handleDeclineExecution}>Decline</Button>
+              <Button variant="solid" theme="user" onClick={handleApproveExecution}>Approve</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Side Toasts */}
       <div style={{ position: 'fixed', top: '80px', right: '1.5rem', zIndex: 9500, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {sideToasts.map(toast => (

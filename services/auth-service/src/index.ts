@@ -123,6 +123,15 @@ app.use('/api/questions', verifyGateway, createProxyMiddleware({
 }));
 
 
+// Route /api/execute to code-execution-service
+app.use('/api/execute', verifyGateway, createProxyMiddleware({
+  target: 'http://code-execution-service:3006',
+  changeOrigin: true,
+  pathRewrite: { '^/': '/execute' },
+  timeout: 300000,        // 5 min — covers first-time image pulls
+  proxyTimeout: 300000,
+}));
+
 const collabProxy = createProxyMiddleware({
   target: 'http://collaboration-service:3004',
   changeOrigin: true,
