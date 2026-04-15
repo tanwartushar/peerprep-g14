@@ -22,7 +22,7 @@ router.get("/user/hello", (req: Request, res: Response) => {
 // 1. Initial trigger: Redirects user to GitHub
 router.get("/user/auth/github", (req: Request, res: Response) => {
   const rootUrl = "https://github.com/login/oauth/authorize";
-  const baseUrl = process.env.BASE_URL || "";
+  const baseUrl = process.env.BASE_URL || "http://localhost:3000";
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
     redirect_uri: `${baseUrl}/user/user/login`,
