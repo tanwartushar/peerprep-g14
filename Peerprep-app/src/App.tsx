@@ -18,6 +18,8 @@ import AdminUsers from "./pages/AdminUsers";
 import AdminAdmins from "./pages/AdminAdmins";
 import UserLayout from "./layouts/UserLayout";
 import AdminLayout from "./layouts/AdminLayout";
+import { ProfileCustomisation } from "./pages/ProfileCustomisation";
+
 // Helper: is the role an admin-level role?
 const isAdminRole = (role: string | null) =>
   role === "ADMIN" || role === "SUPER_ADMIN";
@@ -100,7 +102,8 @@ const App: React.FC = () => {
                   }
                 />
 
-                <Route element={<UserLayout />}>
+                {/* User routes w/ AppShell (Header & Sidebar) */}
+                <Route element={<UserLayout showHeader showSidebar />}>
                   {/* User routes */}
                   <Route
                     path="/user/dashboard"
@@ -118,6 +121,26 @@ const App: React.FC = () => {
                       </ProtectedRoute>
                     }
                   />
+                </Route>
+
+                {/* User routes w/ AppShell (no Header & sidebar) */}
+                <Route
+                  element={
+                    <UserLayout showHeader={false} showSidebar={false} />
+                  }
+                >
+                  <Route
+                    path="user/profile"
+                    element={
+                      <ProtectedRoute>
+                        <ProfileCustomisation />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* User routes w/o AppShell */}
+                <Route>
                   <Route
                     path="/profile-setup"
                     element={
@@ -126,10 +149,6 @@ const App: React.FC = () => {
                       </ProtectedRoute>
                     }
                   />
-                </Route>
-
-                {/* User routes w/o AppShell */}
-                <Route>
                   <Route
                     path="/matching"
                     element={
@@ -148,8 +167,8 @@ const App: React.FC = () => {
                   />
                 </Route>
 
-                {/* Admin routes */}
-                <Route element={<AdminLayout />}>
+                {/* User routes w/ AppShell (Header & Sidebar) */}
+                <Route element={<AdminLayout showHeader showSidebar />}>
                   <Route
                     path="/admin/questions"
                     element={
@@ -171,6 +190,22 @@ const App: React.FC = () => {
                     element={
                       <ProtectedRoute superAdminOnly>
                         <AdminAdmins />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* Admin routes w/ AppShell (no Header & sidebar) */}
+                <Route
+                  element={
+                    <AdminLayout showHeader={false} showSidebar={false} />
+                  }
+                >
+                  <Route
+                    path="admin/profile"
+                    element={
+                      <ProtectedRoute>
+                        <ProfileCustomisation />
                       </ProtectedRoute>
                     }
                   />

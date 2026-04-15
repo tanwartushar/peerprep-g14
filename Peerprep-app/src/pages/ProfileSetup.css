@@ -88,3 +88,24 @@
   padding-top: 2rem;
   gap: 0.5rem;
 }
+
+.profile-picture-container {
+  display: flex;
+  justify-content: center;
+  padding-bottom: 2rem;
+}
+
+.profile-picture-avatar {
+  width: 156px;
+  height: 156px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.25rem;
+  border: 1px solid rgb(var(--user-400-rgb) / 0.95);
+  background: rgb(var(--user-400-rgb) / 0.08);
+  color: var(--user-200);
+  box-shadow: 0 0 24px rgb(var(--user-400-rgb) / 0.18);
+  cursor: pointer;
+}

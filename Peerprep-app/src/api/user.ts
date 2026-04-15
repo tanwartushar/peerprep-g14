@@ -34,6 +34,9 @@ export async function getCurrentUserProfile(): Promise<CurrentUserProfile> {
 export async function updateCurrentUserProfile(
   payload: UpdateCurrentUserProfilePayload,
 ): Promise<CurrentUserProfile> {
+  console.log("updateCurrentUserProfile payload:", payload);
+  console.log("about to call fetch");
+
   const response = await fetch(`/api/user/profile`, {
     method: "PATCH",
     headers: {
@@ -43,11 +46,19 @@ export async function updateCurrentUserProfile(
     body: JSON.stringify(payload),
   });
 
+  console.log("fetch returned");
+  console.log("response status:", response.status);
+  console.log("response ok:", response.ok);
+
+  const rawText = await response.text();
+  console.log("raw response body:", rawText);
+
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(errorBody || "Failed to update current user profile");
+    throw new Error(rawText || "Failed to update current user profile");
   }
 
-  const data = await response.json();
-  return data.user;
+  const data = rawText ? JSON.parse(rawText) : null;
+  console.log("parsed response json:", data);
+
+  return data.user ?? data;
 }
