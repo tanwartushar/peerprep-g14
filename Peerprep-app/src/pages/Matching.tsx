@@ -19,7 +19,10 @@ import {
 import {
   clearActiveMatchRequestId,
   getActiveMatchRequestId,
+  getLastTerminalMatchRequestId,
   setActiveMatchRequestId,
+  setLastTerminalMatchRequestId,
+  clearLastTerminalMatchRequestId,
 } from "../matching/matchingSession";
 
 interface LocationState {
@@ -45,7 +48,10 @@ export const Matching: React.FC = () => {
   const { userId, isLoading: authLoading } = useAuth();
 
   const initialRequestId =
-    locState?.requestId ?? getActiveMatchRequestId() ?? null;
+    locState?.requestId ??
+    getActiveMatchRequestId() ??
+    getLastTerminalMatchRequestId() ??
+    null;
   const [requestId, setRequestId] = useState<string | null>(initialRequestId);
   /** After tab close, session/local storage may be empty — resolve from `GET /requests/active`. */
   const [idResolution, setIdResolution] = useState<"pending" | "done">(() =>
@@ -109,6 +115,17 @@ export const Matching: React.FC = () => {
       if (r.ok && r.data.status === "PENDING") {
         setRequestId(r.data.id);
         setActiveMatchRequestId(r.data.id);
+      } else {
+        const last = getLastTerminalMatchRequestId();
+        if (last) {
+          const detail = await getMatchRequest(last);
+          if (cancelled) return;
+          if (detail.ok && detail.data.status === "TIMED_OUT") {
+            setRequestId(detail.data.id);
+          } else {
+            clearLastTerminalMatchRequestId();
+          }
+        }
       }
       setIdResolution("done");
     })();
@@ -139,12 +156,12 @@ export const Matching: React.FC = () => {
         setResumeNote("Resuming search…");
       }
 
-      setActiveMatchRequestId(requestId);
       const initial = await getMatchRequest(requestId);
       if (cancelled) return;
 
       if (!initial.ok) {
         clearActiveMatchRequestId();
+        clearLastTerminalMatchRequestId();
         navigate("/user/dashboard", { replace: true });
         return;
       }
@@ -179,13 +196,24 @@ export const Matching: React.FC = () => {
       }
 
       if (d.status === "TIMED_OUT") {
+        setLastTerminalMatchRequestId(requestId);
         clearActiveMatchRequestId();
+        setRow({
+          requestId,
+          topic: d.topic,
+          difficulty: d.difficulty,
+          programmingLanguage: d.programmingLanguage,
+          allowLowerDifficultyMatch: d.allowLowerDifficultyMatch,
+          timeAvailableMinutes: d.timeAvailableMinutes ?? undefined,
+        });
+        setFallbackSuggestions(d.fallbackSuggestions ?? []);
         setTerminalMessage(
           d.message ??
             "No match was found in time. You can try again from the dashboard.",
         );
         setTerminal("timeout");
         setResumeNote(null);
+        setReady(true);
         return;
       }
 
@@ -201,6 +229,7 @@ export const Matching: React.FC = () => {
       }
 
       if (d.status === "PENDING") {
+        setActiveMatchRequestId(requestId);
         setRow({
           requestId,
           topic: d.topic,
@@ -298,13 +327,22 @@ export const Matching: React.FC = () => {
     const applyMatchPayload = (data: MatchRequestResponse) => {
       if (cancelled) return;
       if (data.status === "TIMED_OUT") {
+        setLastTerminalMatchRequestId(data.id);
         clearActiveMatchRequestId();
-        setFallbackSuggestions([]);
+        setRow({
+          topic: data.topic,
+          difficulty: data.difficulty,
+          programmingLanguage: data.programmingLanguage,
+          allowLowerDifficultyMatch: data.allowLowerDifficultyMatch,
+          timeAvailableMinutes: data.timeAvailableMinutes ?? undefined,
+        });
+        setFallbackSuggestions(data.fallbackSuggestions ?? []);
         setTerminalMessage(
           data.message ??
             "No match was found in time. You can try again from the dashboard.",
         );
         setTerminal("timeout");
+        setReady(true);
         return;
       }
       if (data.status === "RECONNECT_EXPIRED") {
@@ -438,6 +476,7 @@ export const Matching: React.FC = () => {
     }
     setFallbackError(null);
     setFallbackBusy(s.type);
+    const wasTimeoutTerminal = terminal === "timeout";
     let body:
       | { type: "enable_downward_matching" }
       | { type: "switch_topic_nearby"; topic: string }
@@ -461,6 +500,27 @@ export const Matching: React.FC = () => {
       return;
     }
     const data = result.data;
+    if (wasTimeoutTerminal) {
+      clearLastTerminalMatchRequestId();
+      setActiveMatchRequestId(data.id);
+      setRequestId(data.id);
+      setTerminal("none");
+      setTerminalMessage(null);
+      setFallbackSuggestions(data.fallbackSuggestions ?? []);
+      setRow({
+        topic: data.topic,
+        difficulty: data.difficulty,
+        programmingLanguage: data.programmingLanguage,
+        allowLowerDifficultyMatch: data.allowLowerDifficultyMatch,
+        timeAvailableMinutes: data.timeAvailableMinutes ?? undefined,
+      });
+      syncWaitTimerFromServer(
+        data.createdAt,
+        data.matchTimeoutSeconds ?? 60,
+      );
+      setReady(true);
+      return;
+    }
     if (data.id !== currentId) {
       setRequestId(data.id);
       setActiveMatchRequestId(data.id);
@@ -545,6 +605,49 @@ export const Matching: React.FC = () => {
                   <p className="matching-timeout-message" role="status">
                     {terminalMessage}
                   </p>
+                  {fallbackSuggestions.length > 0 && terminal === "timeout" ? (
+                    <div
+                      className="matching-fallback matching-fallback--terminal"
+                      role="region"
+                      aria-label="Optional search adjustments after timeout"
+                    >
+                      <p className="matching-fallback__intro">
+                        Your search timed out — optional ideas you can still try (or start again from
+                        the dashboard):
+                      </p>
+                      <ul className="matching-fallback__list">
+                        {fallbackSuggestions.map((s) => (
+                          <li key={s.type} className="matching-fallback__item">
+                            <div className="matching-fallback__copy">
+                              <span className="matching-fallback__kind">
+                                {s.type === "enable_downward_matching"
+                                  ? "Lower difficulty"
+                                  : s.type === "switch_topic_nearby"
+                                    ? "Nearby topic"
+                                    : "Popular topic"}
+                              </span>
+                              <strong>{s.title}</strong>
+                              <p>{s.description}</p>
+                            </div>
+                            <Button
+                              theme="user"
+                              variant="solid"
+                              size="sm"
+                              disabled={fallbackBusy !== null}
+                              onClick={() => void handleAcceptFallback(s)}
+                            >
+                              {fallbackBusy === s.type ? "Applying…" : "Use this"}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {fallbackError && terminal === "timeout" ? (
+                    <p className="matching-fallback__error" role="alert">
+                      {fallbackError}
+                    </p>
+                  ) : null}
                   <div className="matching-actions">
                     <Button
                       theme="user"

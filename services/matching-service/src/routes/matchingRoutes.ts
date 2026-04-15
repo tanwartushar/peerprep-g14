@@ -196,6 +196,13 @@ router.post(
         });
         return;
       }
+      if (result.code === "CONFLICT") {
+        res.status(409).json({
+          error:
+            "You already have an active match request. Cancel it before starting a new one.",
+        });
+        return;
+      }
       res.status(409).json({
         error:
           "This suggestion is no longer available. Refresh the page for updated options.",

@@ -73,7 +73,7 @@ export type MatchRequestResponse = {
   updatedAt: string;
   /** Server-side wait duration when status is PENDING (connected). */
   waitTimeMs?: number;
-  /** Advisory; accept via `acceptFallbackSuggestion`. */
+  /** Advisory; accept via `acceptFallbackSuggestion`. Included for `PENDING` while waiting and for `TIMED_OUT` so suggestions stay visible after timeout / return visits. */
   fallbackSuggestions?: FallbackSuggestion[];
 };
 

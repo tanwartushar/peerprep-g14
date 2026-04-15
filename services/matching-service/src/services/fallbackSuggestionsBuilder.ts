@@ -30,23 +30,13 @@ function isMatchTopic(s: string): s is MatchTopic {
 }
 
 /**
- * Builds 0–3 advisory suggestions. Does not read live pool membership.
- * Only for PENDING rows with disconnectedAt === null (actively waiting in matcher).
+ * Core suggestion list from criteria + elapsed wait (no status checks).
+ * Callers enforce PENDING vs TIMED_OUT / window rules.
  */
-export async function buildFallbackSuggestions(
+async function buildFallbackSuggestionsAtWaitTime(
   row: MatchRequestRow,
   waitTimeMs: number,
 ): Promise<FallbackSuggestionDTO[]> {
-  if (row.status !== "PENDING" || row.disconnectedAt !== null) {
-    return [];
-  }
-
-  const matchWindowEndMs =
-    row.createdAt.getTime() + getMatchTimeoutSeconds() * 1000;
-  if (Date.now() >= matchWindowEndMs) {
-    return [];
-  }
-
   const scores = await getTopicActivityScoresCached();
   const currentTopic = row.topic;
   const currentScore = scores[currentTopic] ?? 0;
@@ -142,4 +132,39 @@ export async function buildFallbackSuggestions(
   }
 
   return out;
+}
+
+/**
+ * Builds 0–3 advisory suggestions. Does not read live pool membership.
+ * Only for PENDING rows with disconnectedAt === null (actively waiting in matcher).
+ */
+export async function buildFallbackSuggestions(
+  row: MatchRequestRow,
+  waitTimeMs: number,
+): Promise<FallbackSuggestionDTO[]> {
+  if (row.status !== "PENDING" || row.disconnectedAt !== null) {
+    return [];
+  }
+
+  const matchWindowEndMs =
+    row.createdAt.getTime() + getMatchTimeoutSeconds() * 1000;
+  if (Date.now() >= matchWindowEndMs) {
+    return [];
+  }
+
+  return buildFallbackSuggestionsAtWaitTime(row, waitTimeMs);
+}
+
+/**
+ * Same rules as a full-length wait, for TIMED_OUT rows (GET after timeout / return visit).
+ * Lets clients show what would have been suggested without persisting suggestions in DB.
+ */
+export async function buildFallbackSuggestionsForTimedOut(
+  row: MatchRequestRow,
+): Promise<FallbackSuggestionDTO[]> {
+  if (row.status !== "TIMED_OUT") {
+    return [];
+  }
+  const waitTimeMs = getMatchTimeoutSeconds() * 1000 - 1;
+  return buildFallbackSuggestionsAtWaitTime(row, waitTimeMs);
 }

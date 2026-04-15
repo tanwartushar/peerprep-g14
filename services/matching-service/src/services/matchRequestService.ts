@@ -8,7 +8,9 @@ import {
   getReconnectGraceSeconds,
   MATCH_REQUEST_RECONNECT_EXPIRED_MESSAGE,
 } from "../config/reconnectGrace.js";
-import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
+import type {
+  CreateMatchRequestInput,
+} from "../validation/matchRequestValidation.js";
 import type { MatchRequestRow } from "../types/matchRequestRow.js";
 import {
   buildMatchFoundPayload,
@@ -30,6 +32,7 @@ import {
 } from "../messaging/rabbitMatchQueue.js";
 import {
   buildFallbackSuggestions,
+  buildFallbackSuggestionsForTimedOut,
   type FallbackSuggestionDTO,
 } from "./fallbackSuggestionsBuilder.js";
 import type { AcceptFallbackBody } from "../validation/acceptFallbackValidation.js";
@@ -280,6 +283,10 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
  */
 async function toPublicMatchRequestDto(row: MatchRequestRow): Promise<MatchRequestDTO> {
   const base = toDTO(row);
+  if (row.status === "TIMED_OUT") {
+    const fallbackSuggestions = await buildFallbackSuggestionsForTimedOut(row);
+    return { ...base, fallbackSuggestions };
+  }
   if (row.status !== "PENDING" || row.disconnectedAt !== null) {
     return base;
   }
@@ -773,9 +780,57 @@ export async function reconnectMatchRequestForUser(
   return { ok: true, data: dRecon };
 }
 
+async function acceptFallbackFromTimedOutRow(
+  userId: string,
+  row: MatchRequestRow,
+  body: AcceptFallbackBody,
+): Promise<
+  | { ok: true; data: MatchRequestDTO }
+  | { ok: false; code: "NOT_APPLICABLE" | "CONFLICT" }
+> {
+  const suggestions = await buildFallbackSuggestionsForTimedOut(row);
+  if (body.type === "enable_downward_matching") {
+    const allowed = suggestions.some(
+      (s) => s.type === "enable_downward_matching",
+    );
+    if (!allowed || row.allowLowerDifficultyMatch) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    return createMatchRequest(userId, {
+      topic: row.topic,
+      difficulty: row.difficulty,
+      programmingLanguage: row.programmingLanguage,
+      allowLowerDifficultyMatch: true,
+      ...(row.timeAvailableMinutes != null
+        ? { timeAvailableMinutes: row.timeAvailableMinutes }
+        : {}),
+    } as CreateMatchRequestInput);
+  }
+  const topic = body.topic;
+  const suggestion = suggestions.find(
+    (s) =>
+      s.type === body.type &&
+      s.action.type === "create_new_request" &&
+      s.action.newCriteria.topic === topic,
+  );
+  if (!suggestion) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+  return createMatchRequest(userId, {
+    topic,
+    difficulty: row.difficulty,
+    programmingLanguage: row.programmingLanguage,
+    allowLowerDifficultyMatch: row.allowLowerDifficultyMatch,
+    ...(row.timeAvailableMinutes != null
+      ? { timeAvailableMinutes: row.timeAvailableMinutes }
+      : {}),
+  } as CreateMatchRequestInput);
+}
+
 /**
  * User explicitly accepts an advisory fallback. Downward: PATCH in place, preserves `createdAt`.
  * Topic switch: cancel old PENDING row, create new (new queue position / `createdAt`).
+ * For `TIMED_OUT`, applies the same ideas by creating a new PENDING request (old row unchanged).
  */
 export async function acceptFallbackSuggestion(
   userId: string,
@@ -789,7 +844,8 @@ export async function acceptFallbackSuggestion(
         | "NOT_FOUND"
         | "NOT_PENDING"
         | "DISCONNECTED"
-        | "NOT_APPLICABLE";
+        | "NOT_APPLICABLE"
+        | "CONFLICT";
     }
 > {
   await scheduleMatchQueueRun("accept_fallback_pre");
@@ -801,6 +857,9 @@ export async function acceptFallbackSuggestion(
     return { ok: false, code: "NOT_FOUND" };
   }
   const row = asMatchRow(existing);
+  if (row.status === "TIMED_OUT") {
+    return acceptFallbackFromTimedOutRow(userId, row, body);
+  }
   if (row.status !== "PENDING") {
     return { ok: false, code: "NOT_PENDING" };
   }
