@@ -80,12 +80,53 @@ const SHUTDOWN_HTTP_MS = Number.parseInt(
 
 let server: Server | null = null;
 let isShuttingDown = false;
+let consumerStartRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+const MATCH_QUEUE_CONSUMER_RETRY_MS = Number.parseInt(
+  process.env.MATCH_QUEUE_CONSUMER_RETRY_MS ?? "5000",
+  10,
+);
+
+function scheduleMatchQueueConsumerStartRetry(): void {
+  if (isShuttingDown || !rabbitMatchQueueEnabled()) {
+    return;
+  }
+  if (consumerStartRetryTimer !== null) {
+    clearTimeout(consumerStartRetryTimer);
+  }
+  const retryMs =
+    Number.isFinite(MATCH_QUEUE_CONSUMER_RETRY_MS) &&
+    MATCH_QUEUE_CONSUMER_RETRY_MS > 0
+      ? MATCH_QUEUE_CONSUMER_RETRY_MS
+      : 5000;
+  consumerStartRetryTimer = setTimeout(() => {
+    consumerStartRetryTimer = null;
+    void startMatchQueueConsumerWithRetry();
+  }, retryMs);
+}
+
+async function startMatchQueueConsumerWithRetry(): Promise<void> {
+  if (isShuttingDown || !rabbitMatchQueueEnabled()) {
+    return;
+  }
+  try {
+    await startMatchQueueConsumer(runMatchQueueTick);
+    console.log("[matching] match queue consumer connected");
+  } catch (e) {
+    console.error("[matching] startMatchQueueConsumer failed:", e);
+    scheduleMatchQueueConsumerStartRetry();
+  }
+}
 
 async function gracefulShutdown(signal: string): Promise<void> {
   if (isShuttingDown) {
     return;
   }
   isShuttingDown = true;
+  if (consumerStartRetryTimer !== null) {
+    clearTimeout(consumerStartRetryTimer);
+    consumerStartRetryTimer = null;
+  }
   console.log(`[shutdown] ${signal} received, draining HTTP connections...`);
 
   const httpServer = server;
@@ -172,9 +213,7 @@ server = app.listen(PORT, () => {
 });
 
 if (rabbitMatchQueueEnabled()) {
-  void startMatchQueueConsumer(runMatchQueueTick).catch((e) => {
-    console.error("[matching] startMatchQueueConsumer failed:", e);
-  });
+  void startMatchQueueConsumerWithRetry();
 }
 
 /** Lets matches resolve while users only hold an SSE connection (no GET polling). */
