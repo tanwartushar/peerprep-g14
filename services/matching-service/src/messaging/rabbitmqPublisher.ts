@@ -38,6 +38,7 @@ async function ensureChannel(url: string): Promise<ConfirmChannel | null> {
     await channel.assertExchange(MATCHING_EVENTS_EXCHANGE, "topic", {
       durable: true,
     });
+
   }
   return channel;
 }
