@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
@@ -16,6 +16,8 @@ import {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const stateFromNav = location.state as any;
   const { userId, isLoading } = useAuth();
   const [difficulty, setDifficulty] = useState(
     () => loadMatchFormDraft()?.difficulty ?? "",
@@ -34,6 +36,15 @@ export const Dashboard: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
+
+  const [topToast, setTopToast] = useState<string | null>(stateFromNav?.sessionNotification || null);
+
+  useEffect(() => {
+      if (topToast) {
+         const t = setTimeout(() => setTopToast(null), 10000);
+         return () => clearTimeout(t);
+      }
+  }, [topToast]);
 
   useEffect(() => {
     if (isLoading || !userId) return;
@@ -54,7 +65,7 @@ export const Dashboard: React.FC = () => {
               // always stores 'Deliberate' due to Docker build cache on local services.
               // If the terminator is someone else, this user was offline.
               if (session.terminatedBy !== userId && session.terminatedBy !== 'anonymous') {
-                alert("Your previous session has ended. You can find a new match from the Dashboard.");
+                setTopToast("Your previous session has ended. You can find a new match from the Dashboard.");
               }
               sessionStorage.setItem(shownKey, "true");
             }
@@ -192,6 +203,11 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="animate-fade-in">
+      {topToast && (
+        <div className="top-toast">
+          <span>{topToast}</span>
+        </div>
+      )}
       <div className="dashboard-layout">
         <div className="dashboard-main-container">
           <Card

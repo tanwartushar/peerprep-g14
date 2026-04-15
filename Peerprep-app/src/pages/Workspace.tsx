@@ -14,7 +14,6 @@ import {
 import { Button } from "../components/Button";
 import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
 import { TranslationModal } from "../components/TranslationModal";
-import { TranslationNotification } from "../components/TranslationNotification";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import "./Workspace.css";
 
@@ -101,6 +100,7 @@ export const Workspace: React.FC = () => {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [isTerminating, setIsTerminating] = useState(false);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const sessionEndedRef = React.useRef(false);
 
   // Dynamic Language state
@@ -121,8 +121,17 @@ export const Workspace: React.FC = () => {
   const [translationResult, setTranslationResult] = useState<string>("");
   const [translationTargetLang, setTranslationTargetLang] = useState<string>("");
   const [showTranslationModal, setShowTranslationModal] = useState(false);
-  const [peerTranslationLang, setPeerTranslationLang] = useState<string | null>(null);
   const translateDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [sideToasts, setSideToasts] = useState<Array<{ id: number, message: React.ReactNode, icon: string, border: string }>>([]);
+
+  const addSideToast = useCallback((message: React.ReactNode, icon: string = 'ℹ️', border: string = 'var(--user-400)') => {
+      const id = Date.now() + Math.random();
+      setSideToasts(prev => [...prev, { id, message, icon, border }]);
+      setTimeout(() => {
+          setSideToasts(prev => prev.filter(t => t.id !== id));
+      }, 12000);
+  }, []);
 
   const endSessionOnce = React.useCallback(
     (reason?: string) => {
@@ -130,8 +139,11 @@ export const Workspace: React.FC = () => {
       sessionEndedRef.current = true;
       setHasSessionEnded(true);
       setShowDisconnectModal(false);
-      if (reason) alert(reason);
-      navigate("/user/dashboard");
+      if (reason) {
+        navigate("/user/dashboard", { state: { sessionNotification: reason } });
+      } else {
+        navigate("/user/dashboard");
+      }
       return true;
     },
     [navigate],
@@ -311,9 +323,7 @@ export const Workspace: React.FC = () => {
   };
 
   const handleEndSession = () => {
-    if (window.confirm("This will end the session for both peers. Are you sure you want to end this session?")) {
-      void handleEndSessionInstantly();
-    }
+    setShowEndSessionModal(true);
   };
 
   const handleSystemTerminate = async (reason: string) => {
@@ -341,7 +351,7 @@ export const Workspace: React.FC = () => {
 
     const currentCode = codeEditorRef.current.getCode();
     if (!currentCode || currentCode.trim().length === 0) {
-      alert("There is no code to translate. Write some code first.");
+      addSideToast("There is no code to translate. Write some code first.", "⚠️", "#ed8936");
       return;
     }
 
@@ -369,7 +379,7 @@ export const Workspace: React.FC = () => {
       setTranslationResult(data.translatedCode);
       setShowTranslationModal(true);
     } catch (err: any) {
-      alert(`Translation failed: ${err.message || 'Please try again.'}`);
+      addSideToast(`Translation failed: ${err.message || 'Please try again.'}`, "❌", "#e53e3e");
     } finally {
       setIsTranslating(false);
     }
@@ -391,12 +401,8 @@ export const Workspace: React.FC = () => {
   };
 
   const handlePeerTranslation = useCallback((language: string) => {
-    setPeerTranslationLang(language);
-  }, []);
-
-  const handleDismissNotification = useCallback(() => {
-    setPeerTranslationLang(null);
-  }, []);
+    addSideToast(`Code translated to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language} by your peer`, '✨', 'var(--green, #48bb78)');
+  }, [addSideToast]);
 
   const handleTranslationApprovalRequest = useCallback((language: string, timestamp: number) => {
     setPeerTranslationRequestLang({ language, timestamp });
@@ -411,7 +417,7 @@ export const Workspace: React.FC = () => {
             codeEditorRef.current.broadcastTranslation(prev.language);
           }
         } else {
-          alert('Your request was denied by your peer.');
+          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
         }
         return null;
       }
@@ -438,14 +444,15 @@ export const Workspace: React.FC = () => {
   const handleLanguageChangeApproved = useCallback((language: string) => {
       setPendingLanguageChange(null);
       setCurrentLanguage(language);
-  }, []);
+      addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
+  }, [addSideToast]);
 
   const handleLanguageChangeResponse = useCallback((isApproved: boolean) => {
       setPendingLanguageChange(null);
       if (!isApproved) {
-          alert('Your request was denied by your peer.');
+          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
       }
-  }, []);
+  }, [addSideToast]);
 
   const handleLanguageRequestReject = () => {
     if (codeEditorRef.current) {
@@ -794,6 +801,16 @@ export const Workspace: React.FC = () => {
         <MessageSquare className="h-6 w-6" />
       </button>
 
+      {/* Side Toasts */}
+      <div style={{ position: 'fixed', top: '80px', right: '1.5rem', zIndex: 9500, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        {sideToasts.map(toast => (
+          <div key={toast.id} className="translation-notification__content" style={{ borderLeft: `3px solid ${toast.border}`, animation: 'slideInRight 0.35s ease-out' }}>
+            <span className="translation-notification__icon">{toast.icon}</span>
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Translation Modal */}
       <TranslationModal
         translatedCode={translationResult}
@@ -803,24 +820,60 @@ export const Workspace: React.FC = () => {
         isVisible={showTranslationModal}
       />
 
-      {/* Peer Translation Notification */}
-      <TranslationNotification
-        language={peerTranslationLang}
-        onDismiss={handleDismissNotification}
-      />
-
       {/* Disconnection Modal */}
       {showDisconnectModal && !partnerOnline && !hasSessionEnded && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Peer Disconnected!</h2>
-            <p style={{ marginBottom: '1.5rem', color: '#444' }}>
-              Your peer got disconnected. This session will be closed in 2 minutes to free up resources.<br /><br />
-              You can either Wait for them to reconnect, or end this session and Return to your Dashboard.
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <Button variant="ghost" theme="user" onClick={() => setShowDisconnectModal(false)}>Wait</Button>
-              <Button variant="solid" theme="user" onClick={() => void handleEndSessionInstantly()}>Return to Dashboard</Button>
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '500px', textAlign: 'center' }}>
+            <div className="translation-modal__header" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <h2 className="translation-modal__title" style={{ fontSize: '1.25rem', color: 'var(--accent-danger, #e53e3e)' }}>Peer Disconnected!</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p style={{ marginBottom: '1rem' }}>
+                Your peer got disconnected. This session will be closed in 2 minutes to free up resources.
+              </p>
+              <p>
+                You can either Wait for them to reconnect, or end this session and Return to your Dashboard.
+              </p>
+            </div>
+            <div className="translation-modal__actions" style={{ justifyContent: 'center' }}>
+              <button className="translation-modal__btn translation-modal__btn--reject" onClick={() => setShowDisconnectModal(false)}>
+                Wait
+              </button>
+              <button className="translation-modal__btn translation-modal__btn--approve" onClick={() => void handleEndSessionInstantly()}>
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* End Session Modal */}
+      {showEndSessionModal && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">End Session</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>This will end the session for both peers. Are you sure you want to end this session?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={() => setShowEndSessionModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                style={{ backgroundColor: 'var(--accent-danger, #e53e3e)' }}
+                onClick={() => {
+                  setShowEndSessionModal(false);
+                  void handleEndSessionInstantly();
+                }}
+              >
+                End Session
+              </button>
             </div>
           </div>
         </div>
