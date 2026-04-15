@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { topicScoreFromComponents } from "./topicScoreFormula.js";
+import { topicScoreFromComponents } from "./topicActivityScores.js";
 
 test("topicScoreFromComponents matches weighted formula", () => {
   assert.equal(topicScoreFromComponents(0, 0, 0), 0);

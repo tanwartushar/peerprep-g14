@@ -3,11 +3,9 @@ import prisma from "../prisma.js";
 import {
   getMatchTimeoutSeconds,
   MATCH_REQUEST_TIMEOUT_MESSAGE,
-} from "../config/matchTimeout.js";
-import {
   getReconnectGraceSeconds,
   MATCH_REQUEST_RECONNECT_EXPIRED_MESSAGE,
-} from "../config/reconnectGrace.js";
+} from "../config/matchLifecycle.js";
 import type {
   CreateMatchRequestInput,
 } from "../validation/matchRequestValidation.js";

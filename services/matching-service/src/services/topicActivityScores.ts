@@ -1,11 +1,21 @@
 import { Prisma } from "@prisma/client";
-import prisma from "../prisma.js";
 import { MATCH_TOPICS } from "../constants/matchingOptions.js";
-import { topicScoreFromComponents } from "./topicScoreFormula.js";
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 
-export { topicScoreFromComponents } from "./topicScoreFormula.js";
+/**
+ * topicScore =
+ *   0.5 * activeSeekersLast15Min +
+ *   0.4 * matchesLast30Min -
+ *   0.1 * timeoutsLast30Min
+ */
+export function topicScoreFromComponents(
+  seekers15: number,
+  matches30: number,
+  timeouts30: number,
+): number {
+  return 0.5 * seekers15 + 0.4 * matches30 - 0.1 * timeouts30;
+}
 
 /**
  * - Seekers: rows created in the last 15m for that topic (aggregate intent, not live pool).
@@ -18,6 +28,7 @@ const CACHE_MS = 60_000;
 export async function getTopicActivityScoresCached(): Promise<
   Record<string, number>
 > {
+  const { default: prisma } = await import("../prisma.js");
   const now = Date.now();
   if (cache && now - cache.at < CACHE_MS) {
     return cache.scores;

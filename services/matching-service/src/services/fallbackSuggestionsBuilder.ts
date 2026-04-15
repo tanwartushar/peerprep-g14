@@ -1,6 +1,9 @@
 import type { MatchRequestRow } from "../types/matchRequestRow.js";
-import { MATCH_TOPICS, type MatchTopic } from "../constants/matchingOptions.js";
-import { topicDisplayLabel } from "../constants/topicDisplay.js";
+import {
+  MATCH_TOPICS,
+  topicDisplayLabel,
+  type MatchTopic,
+} from "../constants/matchingOptions.js";
 import {
   NEARBY_TOPICS,
   fallbackScoreDeltaMin,
@@ -8,7 +11,7 @@ import {
   fallbackSuggestNearbyAfterMs,
   fallbackSuggestPopularAfterMs,
 } from "../config/fallbackSuggestions.js";
-import { getMatchTimeoutSeconds } from "../config/matchTimeout.js";
+import { getMatchTimeoutSeconds } from "../config/matchLifecycle.js";
 import { getTopicActivityScoresCached } from "./topicActivityScores.js";
 
 export type FallbackSuggestionAction =
