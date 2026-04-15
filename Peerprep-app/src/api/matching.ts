@@ -1,14 +1,8 @@
 /**
- * Path prefix for matching HTTP API.
- * - Default: `/api/matching` → gateway → auth-service (JWT) → matching-service (`/matching/...`).
- * - Set `VITE_MATCHING_SERVICE_URL` (e.g. `http://localhost:3003`) to call matching-service directly (bypass gateway).
+ * Matching API is always reached via the gateway: `/api/matching` → auth (JWT cookies) → matching-service.
+ * The SPA must be served on an origin where `/api` routes to that gateway (production) or Vite proxies `/api` in dev.
  */
 export function getMatchingApiPrefix(): string {
-  const envUrl = import.meta.env.VITE_MATCHING_SERVICE_URL as string | undefined;
-  if (envUrl && envUrl.length > 0) {
-    const base = envUrl.replace(/\/$/, "");
-    return `${base}/matching`;
-  }
   return "/api/matching";
 }
 
@@ -21,7 +15,8 @@ function matchingFetchInit(init: RequestInit = {}): RequestInit {
   return {
     ...init,
     headers,
-    credentials: import.meta.env.PROD ? "include" : "same-origin",
+    /** Required for httpOnly session cookies through the auth gateway. */
+    credentials: "include",
   };
 }
 
@@ -91,7 +86,7 @@ export async function createMatchRequest(body: {
     return {
       ok: false,
       status: 0,
-      message: `Cannot reach matching service (${hint}). Start it with: cd services/matching-service && npm run dev`,
+      message: `Cannot reach matching service (${hint}).`,
     };
   }
 
@@ -207,7 +202,7 @@ export function disconnectMatchRequestKeepalive(requestId: string): void {
     headers,
     body,
     keepalive: true,
-    credentials: import.meta.env.PROD ? "include" : "same-origin",
+    credentials: "include",
   });
 }
 
@@ -256,15 +251,7 @@ export async function getActiveMatchRequest(): Promise<
   return { ok: false, status: res.status, message };
 }
 
-/**
- * True when calls go through `/api/matching` (cookies + gateway auth).
- * Direct `http(s)` base URL skips the gateway — `EventSource` cannot send cookies the same way in all setups, so the UI falls back to HTTP polling for live updates.
- */
-export function matchingApiUsesGatewayProxy(): boolean {
-  return !getMatchingApiPrefix().startsWith("http");
-}
-
-/** Relative or absolute URL for `EventSource` (same shape as GET detail, streamed as SSE). */
+/** Relative URL for `EventSource` (same origin as the app → gateway → matching SSE). */
 export function getMatchRequestSseUrl(requestId: string): string {
   const prefix = getMatchingApiPrefix();
   return `${prefix}/requests/${encodeURIComponent(requestId)}/events`;
@@ -322,7 +309,7 @@ export async function cancelMatchRequest(
     return {
       ok: false,
       status: 0,
-      message: `Cannot reach matching service (${hint}). Is it running on port 3003?`,
+      message: `Cannot reach matching service (${hint}).`,
     };
   }
 

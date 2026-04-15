@@ -3,8 +3,6 @@ import type { Request, Response } from "express";
 
 const PUBLIC_ERROR_MESSAGE = "Could not complete the request" as const;
 
-const isProduction = process.env.NODE_ENV === "production";
-
 /** Prisma “transient / infra” codes → HTTP 503 (see Prisma error reference). */
 const PRISMA_TRANSIENT_503 = new Set([
   "P1001",
@@ -100,7 +98,8 @@ function httpStatusForError(err: unknown): 503 | 500 {
 
 /**
  * Structured server error: one JSON log line per failure (no x-request-id).
- * Correlation: `errorId` (also returned in JSON when not production).
+ * `errorId` is always returned in the JSON body so clients/support can correlate with server logs
+ * without exposing internal error details (message stays generic).
  */
 export function sendMatchingServerError(
   req: Request,
@@ -124,12 +123,8 @@ export function sendMatchingServerError(
 
   console.error(JSON.stringify(logLine));
 
-  const body: { error: string; errorId?: string } = {
+  res.status(status).json({
     error: PUBLIC_ERROR_MESSAGE,
-  };
-  if (!isProduction) {
-    body.errorId = errorId;
-  }
-
-  res.status(status).json(body);
+    errorId,
+  });
 }

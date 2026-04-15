@@ -11,7 +11,6 @@ import {
   getActiveMatchRequest,
   getMatchRequest,
   getMatchRequestSseUrl,
-  matchingApiUsesGatewayProxy,
   reconnectMatchRequest,
   type MatchRequestResponse,
 } from "../api/matching";
@@ -30,9 +29,6 @@ interface LocationState {
   requestId?: string;
 }
 
-/** When matching hits a direct service URL, use HTTP polling for live updates (no gateway). */
-const LEGACY_POLL_MS_VISIBLE = 2000;
-const LEGACY_POLL_MS_HIDDEN = 12_000;
 /** Rare GET when SSE is primary — catches silent proxy drops. */
 const SSE_FALLBACK_POLL_MS = 45_000;
 
@@ -81,12 +77,6 @@ export const Matching: React.FC = () => {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollError, setPollError] = useState<string | null>(null);
-  /** Drives copy: faster polling only while the tab is visible. */
-  const [pollTabVisible, setPollTabVisible] = useState(
-    () =>
-      typeof document === "undefined" ||
-      document.visibilityState === "visible",
-  );
   /** F8 timeout vs F9 reconnect expiry — same card layout, different copy */
   const [terminal, setTerminal] = useState<"none" | "timeout" | "reconnect">(
     "none",
@@ -282,9 +272,8 @@ export const Matching: React.FC = () => {
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let es: EventSource | null = null;
-    let legacyIntervalId: ReturnType<typeof setInterval> | undefined;
     let fallbackIntervalId: ReturnType<typeof setInterval> | undefined;
-    let legacyPollInFlight = false;
+    let fallbackPollInFlight = false;
 
     const applyMatchPayload = (data: MatchRequestResponse) => {
       if (cancelled) return;
@@ -333,9 +322,9 @@ export const Matching: React.FC = () => {
       }
     };
 
-    const runHttpPoll = async () => {
-      if (legacyPollInFlight) return;
-      legacyPollInFlight = true;
+    const runFallbackHttpPoll = async () => {
+      if (fallbackPollInFlight) return;
+      fallbackPollInFlight = true;
       try {
         const result = await getMatchRequest(requestId);
         if (cancelled) return;
@@ -346,95 +335,45 @@ export const Matching: React.FC = () => {
         setPollError(null);
         applyMatchPayload(result.data);
       } finally {
-        legacyPollInFlight = false;
+        fallbackPollInFlight = false;
       }
     };
 
-    const useSse = matchingApiUsesGatewayProxy();
+    const url = getMatchRequestSseUrl(requestId);
 
-    if (useSse) {
-      setPollTabVisible(true);
-      const url = getMatchRequestSseUrl(requestId);
+    const connectSse = () => {
+      if (cancelled) return;
+      clearTimeout(reconnectTimer);
+      es?.close();
+      es = new EventSource(url, { withCredentials: true });
 
-      const connectSse = () => {
+      const onPayload = (ev: MessageEvent) => {
+        try {
+          const data = JSON.parse(ev.data) as MatchRequestResponse;
+          setPollError(null);
+          applyMatchPayload(data);
+        } catch {
+          if (!cancelled) setPollError("Invalid update from server");
+        }
+      };
+      es.addEventListener("snapshot", onPayload);
+      es.addEventListener("match_request", onPayload);
+      es.onopen = () => {
+        if (!cancelled) setPollError(null);
+      };
+
+      es.onerror = () => {
         if (cancelled) return;
-        clearTimeout(reconnectTimer);
+        setPollError("Live connection interrupted. Reconnecting…");
         es?.close();
-        es = new EventSource(url, { withCredentials: true });
-
-        const onPayload = (ev: MessageEvent) => {
-          try {
-            const data = JSON.parse(ev.data) as MatchRequestResponse;
-            setPollError(null);
-            applyMatchPayload(data);
-          } catch {
-            if (!cancelled) setPollError("Invalid update from server");
-          }
-        };
-        es.addEventListener("snapshot", onPayload);
-        es.addEventListener("match_request", onPayload);
-        es.onopen = () => {
-          if (!cancelled) setPollError(null);
-        };
-
-        es.onerror = () => {
-          if (cancelled) return;
-          setPollError("Live connection interrupted. Reconnecting…");
-          es?.close();
-          reconnectTimer = setTimeout(connectSse, 3000);
-        };
+        reconnectTimer = setTimeout(connectSse, 3000);
       };
+    };
 
-      connectSse();
-      fallbackIntervalId = setInterval(() => {
-        void runHttpPoll();
-      }, SSE_FALLBACK_POLL_MS);
-    } else {
-      const pollIntervalMs = () =>
-        typeof document !== "undefined" &&
-        document.visibilityState === "hidden"
-          ? LEGACY_POLL_MS_HIDDEN
-          : LEGACY_POLL_MS_VISIBLE;
-
-      const syncPollTabVisible = () => {
-        setPollTabVisible(
-          typeof document === "undefined" ||
-            document.visibilityState === "visible",
-        );
-      };
-
-      const reschedule = () => {
-        if (legacyIntervalId !== undefined) {
-          clearInterval(legacyIntervalId);
-          legacyIntervalId = undefined;
-        }
-        legacyIntervalId = setInterval(() => {
-          void runHttpPoll();
-        }, pollIntervalMs());
-      };
-
-      const onVisibilityChange = () => {
-        if (cancelled) return;
-        syncPollTabVisible();
-        if (document.visibilityState === "visible") {
-          void runHttpPoll();
-        }
-        reschedule();
-      };
-
-      syncPollTabVisible();
-      void runHttpPoll();
-      reschedule();
-      document.addEventListener("visibilitychange", onVisibilityChange);
-
-      return () => {
-        cancelled = true;
-        document.removeEventListener("visibilitychange", onVisibilityChange);
-        if (legacyIntervalId !== undefined) {
-          clearInterval(legacyIntervalId);
-        }
-      };
-    }
+    connectSse();
+    fallbackIntervalId = setInterval(() => {
+      void runFallbackHttpPoll();
+    }, SSE_FALLBACK_POLL_MS);
 
     return () => {
       cancelled = true;
@@ -583,11 +522,7 @@ export const Matching: React.FC = () => {
                   <div className="matching-timer">
                     <span className="timer-text">{formatTime(secondsElapsed)}</span>
                     <p className="timer-subtext">
-                      {matchingApiUsesGatewayProxy()
-                        ? `Live updates (SSE), plus a check every ${SSE_FALLBACK_POLL_MS / 1000}s as backup.`
-                        : pollTabVisible
-                          ? `Checking status every ${LEGACY_POLL_MS_VISIBLE / 1000}s`
-                          : "Refreshing less often while this tab is in the background."}
+                      {`Live updates (SSE), plus a status check every ${SSE_FALLBACK_POLL_MS / 1000}s as backup.`}
                     </p>
                   </div>
 

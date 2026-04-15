@@ -24,6 +24,10 @@ import {
   type MatchRequestRow as EngineMatchRequestRow,
 } from "./matchingEngine.js";
 import { broadcastMatchRequestDto } from "../sse/matchRequestSseHub.js";
+import {
+  publishMatchQueueWork,
+  rabbitMatchQueueEnabled,
+} from "../messaging/rabbitMatchQueue.js";
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 type MRUpdateManyData = Prisma.MatchRequestUncheckedUpdateManyInput;
@@ -422,8 +426,28 @@ async function tryMatchQueueAndPublish(): Promise<void> {
   }
 }
 
-/** Matcher + Rabbit + SSE fan-out; safe to call from a background tick. */
+/** Matcher + Rabbit + SSE fan-out; safe to call from a background tick or queue consumer. */
 export async function runMatchQueueTick(): Promise<void> {
+  await tryMatchQueueAndPublish();
+}
+
+/**
+ * When `RABBITMQ_URL` is set, enqueue matcher work (consumer runs `runMatchQueueTick`).
+ * Otherwise runs inline. Falls back to inline if publish fails.
+ */
+export async function scheduleMatchQueueRun(reason: string): Promise<void> {
+  if (rabbitMatchQueueEnabled()) {
+    try {
+      await publishMatchQueueWork(reason);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[matching] publishMatchQueueWork(${reason}) failed: ${msg}; falling back to inline`,
+      );
+      await tryMatchQueueAndPublish();
+    }
+    return;
+  }
   await tryMatchQueueAndPublish();
 }
 
@@ -432,7 +456,7 @@ export async function createMatchRequest(
   input: CreateMatchRequestInput,
 ): Promise<{ ok: true; data: MatchRequestDTO } | { ok: false; code: "CONFLICT" }> {
   try {
-    await tryMatchQueueAndPublish();
+    await scheduleMatchQueueRun("create_pre");
 
     const created = await prisma.matchRequest.create({
       data: {
@@ -450,7 +474,7 @@ export async function createMatchRequest(
 
     await publishMatchRequestCreated(asMatchRow(created));
 
-    await tryMatchQueueAndPublish();
+    await scheduleMatchQueueRun("create_post");
 
     const refreshed = await prisma.matchRequest.findUnique({
       where: { id: created.id },
@@ -474,7 +498,7 @@ export async function getMatchRequestForUser(
   id: string,
   userId: string,
 ): Promise<MatchRequestDTO | null> {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("get_match_request");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -486,7 +510,7 @@ export async function getMatchRequestForUser(
 export async function getActiveMatchRequestForUser(
   userId: string,
 ): Promise<MatchRequestDTO | null> {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("get_active_match_request");
 
   const row = await prisma.matchRequest.findFirst({
     where: { userId, status: "PENDING" } as MRWhere,
@@ -501,7 +525,7 @@ export async function disconnectMatchRequestForUser(
   | { ok: true; data: MatchRequestDTO }
   | { ok: false; code: "NOT_FOUND" | "NOT_PENDING" }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("disconnect");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -549,7 +573,7 @@ export async function disconnectMatchRequestForUser(
     if (ra.status !== "PENDING") {
       return { ok: false, code: "NOT_PENDING" };
     }
-    await tryMatchQueueAndPublish();
+    await scheduleMatchQueueRun("disconnect");
     const dRa = toDTO(ra);
     broadcastMatchRequestDto(id, dRa);
     return { ok: true, data: dRa };
@@ -561,7 +585,7 @@ export async function disconnectMatchRequestForUser(
   if (!refreshed) {
     return { ok: false, code: "NOT_FOUND" };
   }
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("disconnect");
   const dRef = toDTO(asMatchRow(refreshed));
   broadcastMatchRequestDto(id, dRef);
   return { ok: true, data: dRef };
@@ -581,7 +605,7 @@ export async function reconnectMatchRequestForUser(
         | "RECONNECT_EXPIRED";
     }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("reconnect");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -632,7 +656,7 @@ export async function reconnectMatchRequestForUser(
         return { ok: false, code: "RECONNECT_EXPIRED" };
       }
       if (ag.status === "PENDING" && ag.disconnectedAt === null) {
-        await tryMatchQueueAndPublish();
+        await scheduleMatchQueueRun("reconnect");
         const after = await prisma.matchRequest.findFirst({
           where: { id, userId } as MRWhere,
         });
@@ -677,7 +701,7 @@ export async function reconnectMatchRequestForUser(
     }
     const ag2 = asMatchRow(again);
     if (ag2.disconnectedAt === null && ag2.status === "PENDING") {
-      await tryMatchQueueAndPublish();
+      await scheduleMatchQueueRun("reconnect");
       const after = await prisma.matchRequest.findFirst({
         where: { id, userId } as MRWhere,
       });
@@ -694,7 +718,7 @@ export async function reconnectMatchRequestForUser(
     return { ok: false, code: "NOT_DISCONNECTED" };
   }
 
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("reconnect");
 
   const refreshed = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -717,7 +741,7 @@ export async function cancelMatchRequestForUser(
   | { ok: false; code: "TIMED_OUT" }
   | { ok: false; code: "RECONNECT_EXPIRED" }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("cancel");
 
   const existing = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -773,7 +797,7 @@ export async function cancelMatchRequestForUser(
     return { ok: false, code: "NOT_FOUND" };
   }
   await publishMatchRequestCancelled(id, userId);
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("cancel");
   const cancelledDto = toDTO(asMatchRow(updated));
   broadcastMatchRequestDto(id, cancelledDto);
   return { ok: true, data: cancelledDto };

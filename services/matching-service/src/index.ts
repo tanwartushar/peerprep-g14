@@ -7,6 +7,13 @@ import { runMatchQueueTick } from "./services/matchRequestService.js";
 import { runReadinessChecks } from "./health/readiness.js";
 import { disconnectDatabase } from "./prisma.js";
 import { closeRabbitMq } from "./messaging/rabbitmqPublisher.js";
+import {
+  closeMatchQueuePublisher,
+  publishMatchQueueWork,
+  rabbitMatchQueueEnabled,
+  startMatchQueueConsumer,
+  stopMatchQueueConsumer,
+} from "./messaging/rabbitMatchQueue.js";
 
 const app: Application = express();
 const PORT = Number.parseInt(process.env.PORT ?? "3003", 10);
@@ -83,7 +90,21 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   const httpServer = server;
   if (!httpServer) {
-    await closeRabbitMq();
+    try {
+      await stopMatchQueueConsumer();
+    } catch (e) {
+      console.error("[shutdown] match queue consumer:", e);
+    }
+    try {
+      await closeMatchQueuePublisher();
+    } catch (e) {
+      console.error("[shutdown] match queue publisher:", e);
+    }
+    try {
+      await closeRabbitMq();
+    } catch (e) {
+      console.error("[shutdown] RabbitMQ:", e);
+    }
     await disconnectDatabase();
     process.exit(0);
     return;
@@ -111,7 +132,19 @@ async function gracefulShutdown(signal: string): Promise<void> {
     console.error("[shutdown] server.close error:", e);
   });
 
-  console.log("[shutdown] HTTP server closed; closing RabbitMQ and database...");
+  console.log(
+    "[shutdown] HTTP server closed; stopping match queue consumer and closing RabbitMQ...",
+  );
+  try {
+    await stopMatchQueueConsumer();
+  } catch (e) {
+    console.error("[shutdown] match queue consumer:", e);
+  }
+  try {
+    await closeMatchQueuePublisher();
+  } catch (e) {
+    console.error("[shutdown] match queue publisher:", e);
+  }
   try {
     await closeRabbitMq();
   } catch (e) {
@@ -138,6 +171,12 @@ server = app.listen(PORT, () => {
   console.log(`matching-service listening on http://localhost:${PORT}`);
 });
 
+if (rabbitMatchQueueEnabled()) {
+  void startMatchQueueConsumer(runMatchQueueTick).catch((e) => {
+    console.error("[matching] startMatchQueueConsumer failed:", e);
+  });
+}
+
 /** Lets matches resolve while users only hold an SSE connection (no GET polling). */
 const matchQueueTickMs = Number.parseInt(
   process.env.MATCH_QUEUE_TICK_MS ?? "4000",
@@ -145,6 +184,14 @@ const matchQueueTickMs = Number.parseInt(
 );
 if (Number.isFinite(matchQueueTickMs) && matchQueueTickMs > 0) {
   setInterval(() => {
+    if (rabbitMatchQueueEnabled()) {
+      void publishMatchQueueWork("tick").catch((e) => {
+        const m = e instanceof Error ? e.message : String(e);
+        console.error(`[matching] publishMatchQueueWork(tick) failed: ${m}; running inline`);
+        void runMatchQueueTick();
+      });
+      return;
+    }
     void runMatchQueueTick();
   }, matchQueueTickMs);
 }
