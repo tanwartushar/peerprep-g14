@@ -152,3 +152,10 @@ server.on('upgrade', (req: any, socket: any, head: any) => {
     socket.destroy();
   }
 });
+
+// Route /api/ai to ai-service
+app.use('/api/ai', verifyGateway, createProxyMiddleware({
+  target: 'http://ai-service:3005',
+  changeOrigin: true,
+  pathRewrite: { '^/api/ai': '/' },
+}));

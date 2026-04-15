@@ -240,4 +240,45 @@ router.patch('/sessions/:id/terminate', async (req: Request, res: Response): Pro
     }
 });
 
+// PATCH /api/collaboration/sessions/:id/language
+router.patch('/sessions/:id/language', async (req: Request, res: Response): Promise<any> => {
+    try {
+        const authUserId = singleHeader(req, 'x-user-id');
+        if (!authUserId) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const rawSessionId = req.params['id'];
+        const sessionId = typeof rawSessionId === 'string' ? rawSessionId : rawSessionId?.[0];
+
+        if (!sessionId) {
+            return res.status(400).json({ error: 'Invalid session id' });
+        }
+
+        const { language } = req.body;
+        if (!language || typeof language !== 'string') {
+            return res.status(400).json({ error: 'Invalid language' });
+        }
+
+        const session = await prisma.session.findUnique({ where: { id: sessionId } });
+
+        if (!session) {
+            return res.status(404).json({ error: 'Session not found' });
+        }
+        if (session.user1Id !== authUserId && session.user2Id !== authUserId) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        const updatedSession = await prisma.session.update({
+            where: { id: sessionId },
+            data: { language: language.toLowerCase() },
+        });
+
+        return res.status(200).json(updatedSession);
+    } catch (error) {
+        console.error('Failed to update session language:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;
