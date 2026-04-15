@@ -34,11 +34,13 @@ export type MatchFoundEventPayload = {
   userBId: string;
   topic: string;
   programmingLanguage: string;
+  matchedDifficulty: string;
   requesterDifficulty: string;
   partnerDifficulty: string;
   matchingType: "same_difficulty" | "downward";
   matchedTimeAvailableMinutes: number | null;
   occurredAt: string;
+  version: number;
 };
 
 export type MatchTimedOutPayload = {
@@ -74,11 +76,13 @@ export function buildMatchFoundPayload(
     userBId: b.userId,
     topic: a.topic,
     programmingLanguage: a.programmingLanguage,
+    matchedDifficulty: partner.difficulty,
     requesterDifficulty: requester.difficulty,
     partnerDifficulty: partner.difficulty,
     matchingType,
     matchedTimeAvailableMinutes,
     occurredAt: new Date().toISOString(),
+    version: 1,
   };
 }
 

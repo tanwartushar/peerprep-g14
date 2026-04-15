@@ -157,109 +157,65 @@ export const Workspace: React.FC = () => {
 
     const computeId = [state.requestId, state.peerMatchRequestId]
       .sort()
-      .join("-");
+      .join(":");
     setSessionId(computeId);
 
     let mounted = true;
 
     const initSession = async () => {
-      try {
-        // 1. check if session already exists
-        const sessionRes = await fetch(
-          `/api/collaboration/sessions/${computeId}`,
-          {
-            credentials: "include",
-          },
-        );
-        if (sessionRes.ok) {
-          const sessionData = await sessionRes.json();
+      let retryCount = 0;
+      const maxRetries = 15; // Wait up to 15 seconds for backend to initialize
 
-          if (sessionData.status === "terminated") {
-            if (mounted) {
-              setIsSessionLoading(false);
-              endSessionOnce("This session has ended. Returning to Dashboard.");
+      const poll = async () => {
+        if (!mounted) return;
+        try {
+          // 1. check if session already exists (initialized by backend consumer)
+          const sessionRes = await fetch(
+            `/api/collaboration/sessions/${computeId}`,
+            {
+              credentials: "include",
+            },
+          );
+
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+
+            if (sessionData.status === "terminated") {
+              if (mounted) {
+                setIsSessionLoading(false);
+                endSessionOnce("This session has ended. Returning to Dashboard.");
+              }
+              return;
             }
+
+            if (sessionData.language) {
+              setCurrentLanguage(sessionData.language);
+            }
+
+            // 2. fetch question details from questionId provided by backend
+            const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
+            if (qRes.ok) {
+              const qData = await qRes.json();
+              if (mounted) setQuestion(qData);
+            }
+            if (mounted) setIsSessionLoading(false);
             return;
           }
 
-          if (sessionData.language) {
-            setCurrentLanguage(sessionData.language);
+          if (sessionRes.status === 404 && retryCount < maxRetries) {
+            retryCount++;
+            console.log(`[Workspace] Session not ready yet (try ${retryCount}/${maxRetries}), retrying...`);
+            setTimeout(poll, 1000);
+          } else {
+            if (mounted) setIsSessionLoading(false);
           }
-
-          // fetch question
-          const qRes = await fetch(`/api/questions/${sessionData.questionId}`);
-          if (qRes.ok) {
-            const qData = await qRes.json();
-            if (mounted) setQuestion(qData);
-          }
-          if (mounted) setIsSessionLoading(false);
-          return;
-        }
-
-        if (sessionRes.status === 404) {
-          // 2. fetch a random question matching the topic & difficulty
-          // since question-service returns an array for list endpoints, we try exact match first
-          const formattedTopic = (state.topic || "").replace("-", "_");
-          let qRes = await fetch(
-            `/api/questions/?difficulty=${state.difficulty || "medium"}&topic=${formattedTopic}`,
-          );
-          let selectedQ: any = null;
-
-          if (qRes.ok) {
-            const qList = await qRes.json();
-            if (qList && qList.length > 0) {
-              selectedQ = qList[0];
-            }
-          }
-
-          // fallback to match ONLY by difficulty if topic returned nothing
-          if (!selectedQ) {
-            qRes = await fetch(
-              `/api/questions/?difficulty=${state.difficulty || "medium"}`,
-            );
-            if (qRes.ok) {
-              const qList = await qRes.json();
-              if (qList && qList.length > 0) {
-                selectedQ = qList[0];
-              }
-            }
-          }
-
-          // fallback to ANY question if difficulty returned nothing
-          if (!selectedQ) {
-            qRes = await fetch(`/api/questions/`);
-            if (qRes.ok) {
-              const qList = await qRes.json();
-              if (qList && qList.length > 0) {
-                selectedQ = qList[0];
-              }
-            }
-          }
-
-          if (mounted && selectedQ) setQuestion(selectedQ);
-
-          // 3. create the collaboration session
-          const createRes = await fetch(`/api/collaboration/sessions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              matchRequestId: state.requestId,
-              peerMatchRequestId: state.peerMatchRequestId,
-              questionId:
-                selectedQ?.id || selectedQ?._id || "fallback-question",
-            }),
-          });
-
-          if (!createRes.ok && createRes.status !== 409) {
-            console.error("Failed to create session", await createRes.text());
-          }
+        } catch (err) {
+          console.error("Session initialization failed:", err);
           if (mounted) setIsSessionLoading(false);
         }
-      } catch (err) {
-        console.error("Session creation failed:", err);
-        if (mounted) setIsSessionLoading(false);
-      }
+      };
+
+      void poll();
     };
 
     void initSession();

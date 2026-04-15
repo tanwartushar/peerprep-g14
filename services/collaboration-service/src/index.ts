@@ -18,13 +18,14 @@ const Yjs = require('yjs');
 
 import sessionRouter from './routes/session.js';
 import { SessionManager } from './services/SessionManager.js';
+import { initMatchConsumer } from './messaging/matchConsumer.js';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3004;
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL || process.env.DIRECT_URL });
 const adapter = new PrismaPg(pool as any);
-const prisma = new PrismaClient({ adapter });
+export const prisma = new PrismaClient({ adapter });
 
 app.use(cors());
 app.use(express.json());
@@ -36,6 +37,7 @@ const server = createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
 SessionManager.init(prisma, Yjs);
+initMatchConsumer();
 
 wss.on('connection', async (conn: any, req: any, { docName }: any) => {
   console.log(`[WS] Connection established for docName: ${docName}`);

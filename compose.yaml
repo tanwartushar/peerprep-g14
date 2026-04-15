@@ -162,6 +162,8 @@ services:
     environment:
       - CHOKIDAR_USEPOLLING=true
       - MATCHING_SERVICE_URL=http://matching-service:3003
+      - QUESTION_SERVICE_URL=http://question-service:3002
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
     volumes:
       - ./services/collaboration-service/src:/usr/src/app/src
     develop:
