@@ -563,6 +563,7 @@ export const Workspace: React.FC = () => {
         body: JSON.stringify({
           code: currentCode,
           question: questionText,
+          language: currentLanguage,
         }),
       });
 

@@ -23,7 +23,7 @@ export const ExplainModal: React.FC<ExplainModalProps> = ({
         </div>
 
         <div className="translation-modal__body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+          <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '0.95rem', color: '#e2e8f0' }}>
             {explanation}
           </div>
         </div>
