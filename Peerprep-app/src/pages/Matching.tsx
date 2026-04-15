@@ -15,7 +15,6 @@ import {
   reconnectMatchRequest,
   type MatchRequestResponse,
 } from "../api/matching";
-import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 import {
   clearActiveMatchRequestId,
   getActiveMatchRequestId,
@@ -31,7 +30,7 @@ interface LocationState {
   requestId?: string;
 }
 
-/** When matching is called via a direct service URL, `EventSource` cannot send `x-user-id`; use polling. */
+/** When matching hits a direct service URL, use HTTP polling for live updates (no gateway). */
 const LEGACY_POLL_MS_VISIBLE = 2000;
 const LEGACY_POLL_MS_HIDDEN = 12_000;
 /** Rare GET when SSE is primary — catches silent proxy drops. */
@@ -94,19 +93,17 @@ export const Matching: React.FC = () => {
   );
   const [terminalMessage, setTerminalMessage] = useState<string | null>(null);
 
-  const effectiveUserId = getEffectiveMatchingUserId(userId);
-
   /** Resolve request id from server when the tab was closed (no cached id). */
   useEffect(() => {
     if (authLoading) return;
     if (idResolution === "done") return;
-    if (!effectiveUserId) {
+    if (!userId) {
       setIdResolution("done");
       return;
     }
     let cancelled = false;
     void (async () => {
-      const r = await getActiveMatchRequest(effectiveUserId);
+      const r = await getActiveMatchRequest();
       if (cancelled) return;
       if (r.ok && r.data.status === "PENDING") {
         setRequestId(r.data.id);
@@ -117,7 +114,7 @@ export const Matching: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, idResolution, effectiveUserId]);
+  }, [authLoading, idResolution, userId]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -130,7 +127,7 @@ export const Matching: React.FC = () => {
   /** Bootstrap + optional reconnect (F9) */
   useEffect(() => {
     if (authLoading) return;
-    if (idResolution !== "done" || !requestId || !effectiveUserId) return;
+    if (idResolution !== "done" || !requestId || !userId) return;
 
     let cancelled = false;
 
@@ -142,7 +139,7 @@ export const Matching: React.FC = () => {
       }
 
       setActiveMatchRequestId(requestId);
-      const initial = await getMatchRequest(effectiveUserId, requestId);
+      const initial = await getMatchRequest(requestId);
       if (cancelled) return;
 
       if (!initial.ok) {
@@ -214,7 +211,7 @@ export const Matching: React.FC = () => {
 
         if (d.disconnectedAt) {
           setResumeNote("Reconnecting…");
-          const rc = await reconnectMatchRequest(effectiveUserId, requestId);
+          const rc = await reconnectMatchRequest(requestId);
           if (cancelled) return;
           if (!rc.ok) {
             clearActiveMatchRequestId();
@@ -245,7 +242,7 @@ export const Matching: React.FC = () => {
     authLoading,
     idResolution,
     requestId,
-    effectiveUserId,
+    userId,
     navigate,
     locState?.requestId,
   ]);
@@ -267,18 +264,18 @@ export const Matching: React.FC = () => {
 
   /** F9 — page unload while actively waiting */
   useEffect(() => {
-    if (terminal !== "none" || !ready || !requestId || !effectiveUserId) {
+    if (terminal !== "none" || !ready || !requestId || !userId) {
       return;
     }
     const onLeave = () => {
-      disconnectMatchRequestKeepalive(effectiveUserId, requestId);
+      disconnectMatchRequestKeepalive(requestId);
     };
     window.addEventListener("pagehide", onLeave);
     return () => window.removeEventListener("pagehide", onLeave);
-  }, [terminal, ready, requestId, effectiveUserId]);
+  }, [terminal, ready, requestId, userId]);
 
   useEffect(() => {
-    if (terminal !== "none" || !ready || !effectiveUserId || !requestId) {
+    if (terminal !== "none" || !ready || !userId || !requestId) {
       return;
     }
 
@@ -340,7 +337,7 @@ export const Matching: React.FC = () => {
       if (legacyPollInFlight) return;
       legacyPollInFlight = true;
       try {
-        const result = await getMatchRequest(effectiveUserId, requestId);
+        const result = await getMatchRequest(requestId);
         if (cancelled) return;
         if (!result.ok) {
           setPollError(result.message);
@@ -447,17 +444,17 @@ export const Matching: React.FC = () => {
         clearInterval(fallbackIntervalId);
       }
     };
-  }, [effectiveUserId, navigate, terminal, ready, requestId]);
+  }, [userId, navigate, terminal, ready, requestId]);
 
   const handleCancel = async () => {
     setCancelError(null);
-    if (!requestId || !effectiveUserId) {
+    if (!requestId || !userId) {
       navigate("/user/dashboard");
       return;
     }
     setIsCancelling(true);
     try {
-      const result = await cancelMatchRequest(effectiveUserId, requestId);
+      const result = await cancelMatchRequest(requestId);
       if (!result.ok) {
         setCancelError(result.message);
         return;

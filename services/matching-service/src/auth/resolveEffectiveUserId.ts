@@ -3,9 +3,8 @@ import type { Request } from "express";
 const HEADER = "x-user-id";
 
 /**
- * Resolves the authenticated user id for matching routes.
- * In development, the client may send `x-user-id` for local fake users.
- * In production, the gateway must set `x-user-id` after real auth; the browser does not send fake identities.
+ * Resolves the authenticated user id for matching routes from `x-user-id`
+ * (set by the auth gateway after JWT verification).
  */
 export function resolveEffectiveUserIdFromRequest(req: Request): string | null {
   const raw = req.header(HEADER);

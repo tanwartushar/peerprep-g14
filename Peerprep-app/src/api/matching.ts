@@ -12,18 +12,10 @@ export function getMatchingApiPrefix(): string {
   return "/api/matching";
 }
 
-function matchingFetchInit(
-  effectiveUserId: string | null,
-  init: RequestInit = {},
-): RequestInit {
+function matchingFetchInit(init: RequestInit = {}): RequestInit {
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
-  }
-  // Fake / local testing: only the dev build sends x-user-id from the browser.
-  // Production relies on the gateway to set x-user-id after auth (do not send from client).
-  if (import.meta.env.DEV && effectiveUserId) {
-    headers.set("x-user-id", effectiveUserId);
   }
 
   return {
@@ -72,17 +64,14 @@ export type MatchRequestResponse = {
   updatedAt: string;
 };
 
-export async function createMatchRequest(
-  effectiveUserId: string | null,
-  body: {
-    topic: string;
-    difficulty: string;
-    programmingLanguage: string;
-    allowLowerDifficultyMatch?: boolean;
-    /** Omit when user leaves “no preference” */
-    timeAvailableMinutes?: number;
-  },
-): Promise<
+export async function createMatchRequest(body: {
+  topic: string;
+  difficulty: string;
+  programmingLanguage: string;
+  allowLowerDifficultyMatch?: boolean;
+  /** Omit when user leaves “no preference” */
+  timeAvailableMinutes?: number;
+}): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
 > {
   const prefix = getMatchingApiPrefix();
@@ -92,7 +81,7 @@ export async function createMatchRequest(
   try {
     res = await fetch(
       url,
-      matchingFetchInit(effectiveUserId, {
+      matchingFetchInit({
         method: "POST",
         body: JSON.stringify(body),
       }),
@@ -123,7 +112,6 @@ export async function createMatchRequest(
 }
 
 export async function disconnectMatchRequest(
-  effectiveUserId: string | null,
   requestId: string,
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
@@ -135,7 +123,7 @@ export async function disconnectMatchRequest(
   try {
     res = await fetch(
       url,
-      matchingFetchInit(effectiveUserId, {
+      matchingFetchInit({
         method: "POST",
         body: "{}",
       }),
@@ -161,7 +149,6 @@ export async function disconnectMatchRequest(
 }
 
 export async function reconnectMatchRequest(
-  effectiveUserId: string | null,
   requestId: string,
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
@@ -173,7 +160,7 @@ export async function reconnectMatchRequest(
   try {
     res = await fetch(
       url,
-      matchingFetchInit(effectiveUserId, {
+      matchingFetchInit({
         method: "POST",
         body: "{}",
       }),
@@ -201,12 +188,8 @@ export async function reconnectMatchRequest(
 /**
  * Fire-and-forget disconnect for tab close / navigation (F9).
  * Prefer `sendBeacon` (more reliable on unload); fall back to `fetch({ keepalive: true })`.
- * Same-origin `/api/matching` sends session cookies; dev may still need `x-user-id` (fetch path only).
  */
-export function disconnectMatchRequestKeepalive(
-  effectiveUserId: string | null,
-  requestId: string,
-): void {
+export function disconnectMatchRequestKeepalive(requestId: string): void {
   const prefix = getMatchingApiPrefix();
   const url = `${prefix}/requests/${encodeURIComponent(requestId)}/disconnect`;
   const body = "{}";
@@ -219,9 +202,6 @@ export function disconnectMatchRequestKeepalive(
 
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
-  if (import.meta.env.DEV && effectiveUserId) {
-    headers.set("x-user-id", effectiveUserId);
-  }
   void fetch(url, {
     method: "POST",
     headers,
@@ -234,9 +214,7 @@ export function disconnectMatchRequestKeepalive(
 /**
  * Current user’s single PENDING match request, if any (`GET .../requests/active` → 200 or 204).
  */
-export async function getActiveMatchRequest(
-  effectiveUserId: string | null,
-): Promise<
+export async function getActiveMatchRequest(): Promise<
   | { ok: true; data: MatchRequestResponse }
   | { ok: false; status: number; message: string }
 > {
@@ -245,10 +223,7 @@ export async function getActiveMatchRequest(
 
   let res: Response;
   try {
-    res = await fetch(
-      url,
-      matchingFetchInit(effectiveUserId, { method: "GET" }),
-    );
+    res = await fetch(url, matchingFetchInit({ method: "GET" }));
   } catch (e) {
     const hint = e instanceof Error ? e.message : "Network error";
     return {
@@ -281,7 +256,10 @@ export async function getActiveMatchRequest(
   return { ok: false, status: res.status, message };
 }
 
-/** When false, the app talks to matching over a full URL and cannot attach `x-user-id`; use HTTP polling only. */
+/**
+ * True when calls go through `/api/matching` (cookies + gateway auth).
+ * Direct `http(s)` base URL skips the gateway — `EventSource` cannot send cookies the same way in all setups, so the UI falls back to HTTP polling for live updates.
+ */
 export function matchingApiUsesGatewayProxy(): boolean {
   return !getMatchingApiPrefix().startsWith("http");
 }
@@ -293,7 +271,6 @@ export function getMatchRequestSseUrl(requestId: string): string {
 }
 
 export async function getMatchRequest(
-  effectiveUserId: string | null,
   requestId: string,
 ): Promise<
   | { ok: true; data: MatchRequestResponse }
@@ -304,10 +281,7 @@ export async function getMatchRequest(
 
   let res: Response;
   try {
-    res = await fetch(
-      url,
-      matchingFetchInit(effectiveUserId, { method: "GET" }),
-    );
+    res = await fetch(url, matchingFetchInit({ method: "GET" }));
   } catch (e) {
     const hint = e instanceof Error ? e.message : "Network error";
     return {
@@ -333,7 +307,6 @@ export async function getMatchRequest(
 }
 
 export async function cancelMatchRequest(
-  effectiveUserId: string | null,
   requestId: string,
 ): Promise<
   { ok: true; data: MatchRequestResponse } | { ok: false; status: number; message: string }
@@ -343,10 +316,7 @@ export async function cancelMatchRequest(
 
   let res: Response;
   try {
-    res = await fetch(
-      url,
-      matchingFetchInit(effectiveUserId, { method: "DELETE" }),
-    );
+    res = await fetch(url, matchingFetchInit({ method: "DELETE" }));
   } catch (e) {
     const hint = e instanceof Error ? e.message : "Network error";
     return {

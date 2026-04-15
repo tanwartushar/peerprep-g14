@@ -19,29 +19,9 @@ app.use((req: any, res: any, next: any) => {
 const ACCESS_SECRET = process.env.ACCESS_TOKEN_SECRET!;
 const PORT = process.env.PORT || 3000;
 
-function effectiveUserIdForRequest(
-  req: any,
-  userIdFromJwt: string,
-  incomingUserIdHeader: unknown,
-): string {
-  const isMatching =
-    typeof req.originalUrl === 'string' &&
-    req.originalUrl.startsWith('/api/matching');
-  if (
-    process.env.NODE_ENV !== 'production' &&
-    isMatching &&
-    typeof incomingUserIdHeader === 'string' &&
-    incomingUserIdHeader.trim() !== ''
-  ) {
-    return incomingUserIdHeader.trim();
-  }
-  return userIdFromJwt;
-}
-
 // Middleware to verify JWT
 const verifyGateway = async (req: any, res: any, next: any) => {
   const { accessToken, refreshToken } = req.cookies;
-  const incomingUserIdHeader = req.headers['x-user-id'];
 
   console.log(req.path);
   console.log('Gateway Middleware Triggered');
@@ -49,7 +29,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
   if (accessToken) {
     try {
       const decoded = jwt.verify(accessToken, ACCESS_SECRET) as { userId: string, role: string };
-      req.headers['x-user-id'] = effectiveUserIdForRequest(req, decoded.userId, incomingUserIdHeader);
+      req.headers['x-user-id'] = decoded.userId;
       req.headers['x-user-role'] = decoded.role;
       return next();
     } catch (err: any) {
@@ -78,7 +58,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
         maxAge: 15 * 60 * 1000
       });
 
-      req.headers['x-user-id'] = effectiveUserIdForRequest(req, userId, incomingUserIdHeader);
+      req.headers['x-user-id'] = userId;
       req.headers['x-user-role'] = role;
       return next();
     } catch (refreshErr) {

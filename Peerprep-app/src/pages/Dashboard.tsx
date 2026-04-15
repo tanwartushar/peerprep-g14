@@ -7,7 +7,6 @@ import "./Dashboard.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
 import { createMatchRequest, getActiveMatchRequest } from "../api/matching";
-import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
 import {
   getActiveMatchRequestId,
   setActiveMatchRequestId,
@@ -49,8 +48,7 @@ export const Dashboard: React.FC = () => {
     let mounted = true;
 
     const checkActiveSession = async () => {
-      const effId = getEffectiveMatchingUserId(userId);
-      if (!effId) {
+      if (!userId) {
         if (mounted) setResumeCheckDone(true);
         return;
       }
@@ -78,7 +76,7 @@ export const Dashboard: React.FC = () => {
           } else if (session.status === "active") {
             const part1 = session.id.slice(0, 36);
             const part2 = session.id.slice(37);
-            const isUser1 = session.user1Id === (effId || userId);
+            const isUser1 = session.user1Id === userId;
             navigate("/workspace", {
               state: {
                 requestId: part1,
@@ -99,7 +97,7 @@ export const Dashboard: React.FC = () => {
       }
 
       try {
-        const matchRes = await getActiveMatchRequest(effId);
+        const matchRes = await getActiveMatchRequest();
         if (!mounted) return;
         if (matchRes.ok && matchRes.data.status === "PENDING") {
           setActiveMatchRequestId(matchRes.data.id);
@@ -147,14 +145,13 @@ export const Dashboard: React.FC = () => {
   const handleStartMatching = async () => {
     setSubmitError(null);
     if (!difficulty || !topic || !programmingLanguage) return;
-    const effectiveId = getEffectiveMatchingUserId(userId);
-    if (!effectiveId) {
+    if (!userId) {
       setSubmitError("Sign in to find a match.");
       return;
     }
     setIsSubmitting(true);
     try {
-      const result = await createMatchRequest(effectiveId, {
+      const result = await createMatchRequest({
         topic,
         difficulty,
         programmingLanguage,
@@ -179,7 +176,7 @@ export const Dashboard: React.FC = () => {
         return;
       }
       if (result.status === 409) {
-        const existing = await getActiveMatchRequest(effectiveId);
+        const existing = await getActiveMatchRequest();
         if (existing.ok && existing.data.status === "PENDING") {
           setActiveMatchRequestId(existing.data.id);
           navigate("/matching", {
