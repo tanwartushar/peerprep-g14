@@ -911,7 +911,7 @@ export const Workspace: React.FC = () => {
             </div>
             <div className="console-content" style={{ fontFamily: 'monospace', fontSize: '13px', padding: '0.75rem', overflowY: 'auto' }}>
               {execStatus === 'idle' && (
-                <span className="text-muted text-sm">Waiting for execution...</span>
+                <span className="text-muted text-sm">Run your code to see the output here</span>
               )}
               {execStatus === 'pending' && (
                 <span style={{ color: 'var(--text-secondary)' }}>

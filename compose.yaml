@@ -169,7 +169,10 @@ services:
     ports:
       - "3004:3004"
     depends_on:
-      - matching-service
+      rabbitmq:
+        condition: service_healthy
+      matching-service:
+        condition: service_started
     env_file:
       - ./services/collaboration-service/.env
     build:
