@@ -23,7 +23,7 @@ const UserLayout: React.FC<LayoutProps> = ({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleProfile = async () => {
-    navigate("/profile");
+    navigate("user/profile");
   };
 
   const handleLogout = async () => {

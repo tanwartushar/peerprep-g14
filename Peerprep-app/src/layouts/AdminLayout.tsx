@@ -25,7 +25,7 @@ const AdminLayout: React.FC<LayoutProps> = ({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleProfile = async () => {
-    navigate("/profile");
+    navigate("admin/profile");
   };
 
   const handleLogout = async () => {

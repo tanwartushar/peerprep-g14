@@ -132,7 +132,7 @@ const App: React.FC = () => {
                   }
                 >
                   <Route
-                    path="/profile"
+                    path="user/profile"
                     element={
                       <ProtectedRoute>
                         <ProfileCustomisation />
@@ -192,6 +192,22 @@ const App: React.FC = () => {
                     element={
                       <ProtectedRoute superAdminOnly>
                         <AdminAdmins />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* Admin routes w/ AppShell (no Header & sidebar) */}
+                <Route
+                  element={
+                    <AdminLayout showHeader={false} showSidebar={false} />
+                  }
+                >
+                  <Route
+                    path="admin/profile"
+                    element={
+                      <ProtectedRoute>
+                        <ProfileCustomisation />
                       </ProtectedRoute>
                     }
                   />
