@@ -3,13 +3,15 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { SessionManager } from '../services/SessionManager.js';
+import { SessionService } from '../services/SessionService.js';
+import { prisma } from '../index.js';
 
 const { Pool } = pg;
 
 const router = Router();
-const pool = new Pool({ connectionString: process.env.DATABASE_URL || process.env.DIRECT_URL });
-const adapter = new PrismaPg(pool as any);
-const prisma = new PrismaClient({ adapter });
+// const pool = new Pool({ connectionString: process.env.DATABASE_URL || process.env.DIRECT_URL });
+// const adapter = new PrismaPg(pool as any);
+// const prisma = new PrismaClient({ adapter });
 
 function singleHeader(req: Request, name: string): string | undefined {
     const v = req.headers[name];
@@ -22,9 +24,15 @@ function matchingBaseUrl(): string {
     return (process.env.MATCHING_SERVICE_URL || 'http://127.0.0.1:3003').replace(/\/$/, '');
 }
 
+function questionServiceBaseUrl(): string {
+    return (process.env.QUESTION_SERVICE_URL || 'http://question-service:3002').replace(/\/$/, '');
+}
+
 type MatchRequestJson = {
     status: string;
     userId: string;
+    topic: string;
+    matchedDifficulty: string; // Updated from difficulty
     programmingLanguage: string;
     peer?: { userId: string; matchRequestId: string } | null;
 };
@@ -35,6 +43,8 @@ type VerifiedPair =
         sessionId: string;
         user1Id: string;
         user2Id: string;
+        topic: string;
+        difficulty: string;
         language: string;
     }
     | { kind: 'verify_failed' }
@@ -73,7 +83,7 @@ async function verifyMatchFromMatchingService(
     }
 
     const partnerUserId = data.peer.userId;
-    const sessionId = [ownMatchRequestId, expectedPeerRequestId].sort().join('-');
+    const sessionId = [ownMatchRequestId, expectedPeerRequestId].sort().join(':');
     const sortedUsers = [authUserId, partnerUserId].sort();
     const user1Id = sortedUsers[0] as string;
     const user2Id = sortedUsers[1] as string;
@@ -83,6 +93,8 @@ async function verifyMatchFromMatchingService(
         sessionId,
         user1Id,
         user2Id,
+        topic: data.topic || 'Arrays',
+        difficulty: data.matchedDifficulty || 'medium',
         language: data.programmingLanguage || 'javascript',
     };
 }
@@ -95,13 +107,13 @@ router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        const { matchRequestId, peerMatchRequestId, questionId } = req.body as {
+        const { matchRequestId, peerMatchRequestId } = req.body as {
             matchRequestId?: string;
             peerMatchRequestId?: string;
-            questionId?: string;
         };
+        let { questionId } = req.body as { questionId?: string };
 
-        if (!matchRequestId || !peerMatchRequestId || !questionId) {
+        if (!matchRequestId || !peerMatchRequestId) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
@@ -118,14 +130,14 @@ router.post('/sessions', async (req: Request, res: Response): Promise<any> => {
             return res.status(403).json({ error: 'Match could not be verified' });
         }
 
-        const session = await prisma.session.create({
-            data: {
-                id: verified.sessionId,
-                user1Id: verified.user1Id,
-                user2Id: verified.user2Id,
-                questionId,
-                language: verified.language,
-            },
+        // Use SessionService for idempotent creation
+        const session = await SessionService.createSession({
+            matchId: verified.sessionId,
+            user1Id: verified.user1Id,
+            user2Id: verified.user2Id,
+            topic: verified.topic,
+            difficulty: verified.difficulty,
+            language: verified.language,
         });
 
         return res.status(201).json(session);
