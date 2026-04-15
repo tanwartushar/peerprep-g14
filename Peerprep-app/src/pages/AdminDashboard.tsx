@@ -29,8 +29,8 @@ interface Question {
   id: string;
   title: string;
   topics: string[];
-  constraint: string,
-  expectedOutput: string,
+  constraint: string;
+  expectedOutput: string;
   difficulty: "easy" | "medium" | "hard";
   description?: string;
   imageUrls: string[];
@@ -161,16 +161,24 @@ export const AdminDashboard: React.FC = () => {
       const originalUrls = editingId
         ? questions.find((q) => q.id === editingId)?.imageUrls || []
         : [];
-      const removedUrls = originalUrls.filter(url => !formData.imageUrls.includes(url));
+      const removedUrls = originalUrls.filter(
+        (url) => !formData.imageUrls.includes(url),
+      );
 
       let uploadedUrls: string[] = [];
       if (newImageFiles.length > 0) {
-        const uploads = newImageFiles.map(file => uploadQuestionImage(storageId, file));
+        const uploads = newImageFiles.map((file) =>
+          uploadQuestionImage(storageId, file),
+        );
         uploadedUrls = await Promise.all(uploads);
       }
 
       if (removedUrls.length > 0) {
-        await Promise.all(removedUrls.map(url => deleteQuestionImage(url).catch(console.error)));
+        await Promise.all(
+          removedUrls.map((url) =>
+            deleteQuestionImage(url).catch(console.error),
+          ),
+        );
       }
 
       const finalImageUrls = [...formData.imageUrls, ...uploadedUrls];
@@ -286,7 +294,7 @@ export const AdminDashboard: React.FC = () => {
               expectedOutput: question.expectedOutput,
               description: question.description,
               imageUrls: question.imageUrls,
-              attempts: 0,
+              attempts: question.matched,
             }))}
             isLoading={isLoading}
             selectedQuestionId={selectedQuestionId}
@@ -317,8 +325,17 @@ export const AdminDashboard: React.FC = () => {
         title={editingId ? "Edit Question" : "Add New Question"}
         footer={
           <>
-            <Button theme="admin" variant="solid" onClick={handleSaveQuestion} disabled={isSaving}>
-              {isSaving ? "Saving..." : (editingId ? "Save Changes" : "Create Question")}
+            <Button
+              theme="admin"
+              variant="solid"
+              onClick={handleSaveQuestion}
+              disabled={isSaving}
+            >
+              {isSaving
+                ? "Saving..."
+                : editingId
+                  ? "Save Changes"
+                  : "Create Question"}
             </Button>
           </>
         }

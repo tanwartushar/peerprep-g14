@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
@@ -16,6 +16,8 @@ import {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const stateFromNav = location.state as any;
   const { userId, isLoading } = useAuth();
   const [difficulty, setDifficulty] = useState(
     () => loadMatchFormDraft()?.difficulty ?? "",
@@ -34,6 +36,70 @@ export const Dashboard: React.FC = () => {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const dashboardTheme = "user";
+
+  const [topToast, setTopToast] = useState<string | null>(stateFromNav?.sessionNotification || null);
+
+  useEffect(() => {
+      if (topToast) {
+         const t = setTimeout(() => setTopToast(null), 10000);
+         return () => clearTimeout(t);
+      }
+  }, [topToast]);
+
+  useEffect(() => {
+    if (isLoading || !userId) return;
+    let mounted = true;
+
+    const checkActiveSession = async () => {
+      try {
+        const res = await fetch('/api/collaboration/sessions/active', {
+          credentials: 'include'
+        });
+        if (res.ok && res.status !== 204 && mounted) {
+          const session = await res.json();
+          // termination validation: alert offline returning users
+          if (session.status === "terminated") {
+            const shownKey = `notified_termination_${session.id}`;
+            if (!sessionStorage.getItem(shownKey)) {
+              // Rely on terminatedBy rather than terminateReason since the DB
+              // always stores 'Deliberate' due to Docker build cache on local services.
+              // If the terminator is someone else, this user was offline.
+              if (session.terminatedBy !== userId && session.terminatedBy !== 'anonymous') {
+                setTopToast("Your previous session has ended. You can find a new match from the Dashboard.");
+              }
+              sessionStorage.setItem(shownKey, "true");
+            }
+            return;
+          }
+          // only resume an actually active session (terminated rows must not trap users in a WS loop)
+          if (session.status !== "active") {
+            return;
+          }
+          // extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
+          const part1 = session.id.slice(0, 36);
+          const part2 = session.id.slice(37);
+          const effId = getEffectiveMatchingUserId(userId);
+          const isUser1 = session.user1Id === (effId || userId);
+
+          navigate('/workspace', {
+            state: {
+              requestId: part1,
+              peerMatchRequestId: part2,
+              programmingLanguage: session.language,
+              peerUserId: isUser1 ? session.user2Id : session.user1Id,
+              difficulty: '',
+              topic: ''
+            }
+          });
+        }
+      } catch (e) {
+        // dashboard renders normally
+      }
+    };
+
+    void checkActiveSession();
+    return () => { mounted = false; };
+  }, [userId, isLoading, navigate]);
 
   useEffect(() => {
     saveMatchFormDraft({
@@ -137,6 +203,11 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="animate-fade-in">
+      {topToast && (
+        <div className="top-toast">
+          <span>{topToast}</span>
+        </div>
+      )}
       <div className="dashboard-layout">
         <div className="dashboard-main-container">
           <Card

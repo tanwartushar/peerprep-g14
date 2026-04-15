@@ -37,18 +37,11 @@ const UserLayout: React.FC = () => {
       active: location.pathname.startsWith("/user/questions"),
       onClick: () => navigate("/user/questions"),
     },
-    {
-      key: "friends",
-      label: "Friends",
-      active: location.pathname.startsWith("/user/friends"),
-      onClick: () => navigate("/user/friends"),
-    },
   ];
 
   const pageNameMap: Record<string, string> = {
     "/user/dashboard": "Home",
     "/user/questions": "Questions",
-    "/user/friends": "Friends",
   };
 
   const pageName = pageNameMap[location.pathname] ?? "";
