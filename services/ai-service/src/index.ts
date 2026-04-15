@@ -11,9 +11,8 @@ const PORT = process.env.PORT || 3005;
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-// Health check
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', service: 'ai-service' });
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200).send('OK');
 });
 
 // Routes

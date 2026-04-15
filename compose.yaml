@@ -179,7 +179,7 @@ services:
       - "3006:3006"
     build:
       context: ./services/code-execution-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     env_file:
       - ./services/code-execution-service/.env
     environment:
@@ -195,7 +195,7 @@ services:
       - "3005:3005"
     build:
       context: ./services/ai-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/ai-service/.env

@@ -1,24 +1,20 @@
 package rediscache
 
 import (
-	"context"
-	"encoding/json"
-	"log"
-	"strings"
-	"time"
+	// "net/http"
+	// "log"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/tgonet/peerprep-g14/services/question-service/question/repository"
+	// "github.com/gin-gonic/gin"
+	// "github.com/gin-contrib/cors"
+	// "github.com/tgonet/peerprep-g14/services/question-service"
+	// "github.com/tgonet/peerprep-g14/services/question-service/handler"
+	// "github.com/tgonet/peerprep-g14/services/question-service/internal/database"
+	// "github.com/tgonet/peerprep-g14/services/question-service/question/repository"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+	"github.com/redis/go-redis/v9"
 )
 
-const cacheKey = "top_matched_questions"
-const cacheTTL = 20 * time.Minute
-
-// CacheTop5Matched queries the top 5 most-matched questions from MongoDB
-// and stores them in Redis. Errors are logged but do not panic.
-func CacheTop5Matched(mongoclient *mongo.Client, redisclient *redis.Client) {
-	svc := &repository.QuestionService{}
+func CacheTop5Matched(mongoclient *mongo.Client, redisclient *redis.Client)ice{}
 	questions, err := svc.QueryTop5MatchedQuestions(mongoclient)
 	if err != nil {
 		log.Printf("warning: failed to query top 5 matched questions: %v", err)
