@@ -6,9 +6,7 @@ import {
   getReconnectGraceSeconds,
   MATCH_REQUEST_RECONNECT_EXPIRED_MESSAGE,
 } from "../config/matchLifecycle.js";
-import type {
-  CreateMatchRequestInput,
-} from "../validation/matchRequestValidation.js";
+import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
 import type { MatchRequestRow } from "../types/matchRequestRow.js";
 import {
   buildMatchFoundPayload,
@@ -215,9 +213,7 @@ export type MatchQueueEffects = {
   matches: MatchFoundEventPayload[];
 };
 
-function dtoMessage(
-  status: MatchRequestDTO["status"],
-): string | null {
+function dtoMessage(status: MatchRequestDTO["status"]): string | null {
   if (status === "TIMED_OUT") return MATCH_REQUEST_TIMEOUT_MESSAGE;
   if (status === "RECONNECT_EXPIRED") {
     return MATCH_REQUEST_RECONNECT_EXPIRED_MESSAGE;
@@ -244,9 +240,7 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
 
   const expiresAt =
     row.status === "PENDING"
-      ? new Date(
-          row.createdAt.getTime() + timeoutSec * 1000,
-        ).toISOString()
+      ? new Date(row.createdAt.getTime() + timeoutSec * 1000).toISOString()
       : null;
 
   return {
@@ -279,7 +273,9 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
  * Public DTO for API/SSE: adds wait time + opt-in fallback suggestions for connected PENDING rows.
  * Does not change matching semantics.
  */
-async function toPublicMatchRequestDto(row: MatchRequestRow): Promise<MatchRequestDTO> {
+async function toPublicMatchRequestDto(
+  row: MatchRequestRow,
+): Promise<MatchRequestDTO> {
   const base = toDTO(row);
   if (row.status === "TIMED_OUT") {
     const fallbackSuggestions = await buildFallbackSuggestionsForTimedOut(row);
@@ -501,7 +497,9 @@ export async function scheduleMatchQueueRun(reason: string): Promise<void> {
 export async function createMatchRequest(
   userId: string,
   input: CreateMatchRequestInput,
-): Promise<{ ok: true; data: MatchRequestDTO } | { ok: false; code: "CONFLICT" }> {
+): Promise<
+  { ok: true; data: MatchRequestDTO } | { ok: false; code: "CONFLICT" }
+> {
   try {
     await scheduleMatchQueueRun("create_pre");
 
@@ -529,7 +527,10 @@ export async function createMatchRequest(
     if (!refreshed) {
       throw new Error("Match request missing after create");
     }
-    return { ok: true, data: await toPublicMatchRequestDto(asMatchRow(refreshed)) };
+    return {
+      ok: true,
+      data: await toPublicMatchRequestDto(asMatchRow(refreshed)),
+    };
   } catch (e) {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -592,9 +593,7 @@ export async function disconnectMatchRequestForUser(
   }
 
   const now = new Date();
-  const deadline = new Date(
-    now.getTime() + getReconnectGraceSeconds() * 1000,
-  );
+  const deadline = new Date(now.getTime() + getReconnectGraceSeconds() * 1000);
 
   const updated = await prisma.matchRequest.updateMany({
     where: {
@@ -673,8 +672,7 @@ export async function reconnectMatchRequestForUser(
 
   const now = new Date();
   const deadlineMs = r.reconnectDeadlineAt?.getTime() ?? null;
-  const graceExpired =
-    deadlineMs !== null && deadlineMs <= now.getTime();
+  const graceExpired = deadlineMs !== null && deadlineMs <= now.getTime();
 
   if (graceExpired) {
     const expired = await prisma.matchRequest.updateMany({
@@ -728,10 +726,7 @@ export async function reconnectMatchRequestForUser(
       userId,
       status: "PENDING",
       disconnectedAt: { not: null },
-      OR: [
-        { reconnectDeadlineAt: null },
-        { reconnectDeadlineAt: { gt: now } },
-      ],
+      OR: [{ reconnectDeadlineAt: null }, { reconnectDeadlineAt: { gt: now } }],
     } as unknown as MRWhere,
     data: {
       disconnectedAt: null,
