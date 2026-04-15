@@ -14,10 +14,12 @@ import {
   Languages,
   Loader2,
   ChevronDown,
+  Lightbulb,
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
 import { TranslationModal } from "../components/TranslationModal";
+import { ExplainModal } from "../components/ExplainModal";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { useAuth } from "../context/AuthContext";
 import "./Workspace.css";
@@ -136,6 +138,11 @@ export const Workspace: React.FC = () => {
   const [translationTargetLang, setTranslationTargetLang] = useState<string>("");
   const [showTranslationModal, setShowTranslationModal] = useState(false);
   const translateDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Explain state
+  const [isExplaining, setIsExplaining] = useState(false);
+  const [explanationResult, setExplanationResult] = useState<string>("");
+  const [showExplainModal, setShowExplainModal] = useState(false);
 
   const [sideToasts, setSideToasts] = useState<Array<{ id: number, message: React.ReactNode, icon: string, border: string }>>([]);
 
@@ -581,6 +588,43 @@ export const Workspace: React.FC = () => {
     });
   }, []);
 
+  const handleExplainCode = async () => {
+    if (!codeEditorRef.current || isExplaining) return;
+
+    const currentCode = codeEditorRef.current.getCode();
+    if (!currentCode || currentCode.trim().length === 0) {
+      addSideToast("There is no code to explain. Write some code first.", "⚠️", "#ed8936");
+      return;
+    }
+
+    setIsExplaining(true);
+    try {
+      const questionText = question ? `${question.title}\n${question.description}` : "";
+      const res = await fetch('/api/ai/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: currentCode,
+          question: questionText,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Explanation failed');
+      }
+
+      const data = await res.json();
+      setExplanationResult(data.explanation);
+      setShowExplainModal(true);
+    } catch (err: any) {
+      addSideToast(`Explanation failed: ${err.message || 'Please try again.'}`, "❌", "#e53e3e");
+    } finally {
+      setIsExplaining(false);
+    }
+  };
+
   // Language Change Handlers
   const handleLanguageSelect = (lang: string) => {
     setShowLanguageDropdown(false);
@@ -863,6 +907,21 @@ export const Workspace: React.FC = () => {
                 )}
                 {execStatus === 'pending' ? 'Awaiting Approval...' : execStatus === 'running' ? 'Running...' : 'Run Code'}
               </Button>
+              {/* Explain Code Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExplainCode}
+                disabled={isExplaining}
+                className="ml-2"
+              >
+                {isExplaining ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Lightbulb className="h-4 w-4 mr-2" style={{ color: 'var(--accent-warning, #ecc94b)' }} />
+                )}
+                {isExplaining ? "Explaining..." : "Explain"}
+              </Button>
               {/* Translate Code Button */}
               <div className="translate-container" ref={translateDropdownRef}>
                 <Button
@@ -1063,6 +1122,13 @@ export const Workspace: React.FC = () => {
         onReject={handleTranslationReject}
         onApprove={handleTranslationApprove}
         isVisible={showTranslationModal}
+      />
+
+      {/* Explain Modal */}
+      <ExplainModal
+        explanation={explanationResult}
+        isVisible={showExplainModal}
+        onClose={() => setShowExplainModal(false)}
       />
 
       {/* Disconnection Modal */}
