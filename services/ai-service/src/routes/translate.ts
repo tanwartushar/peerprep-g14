@@ -69,7 +69,7 @@ router.post('/', async (req: any, res: any) => {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    const model = genAI.getGenerativeModel({ model: 'gemma-3-27b-it' });
 
     const sourceLangDisplay = LANGUAGE_DISPLAY[sourceLanguage?.toLowerCase()] || sourceLanguage || 'the original language';
     const targetLangDisplay = LANGUAGE_DISPLAY[targetLanguage.toLowerCase()];
