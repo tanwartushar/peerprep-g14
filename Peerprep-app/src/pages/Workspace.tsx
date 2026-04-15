@@ -176,11 +176,7 @@ export const Workspace: React.FC = () => {
   const [showExplainModal, setShowExplainModal] = useState(false);
 
   // Chat service
-  const chatChannelId =
-    sessionId && sessionId !== "default-session"
-      ? `match_${sessionId.replace(/:/g, "_")}`
-      : null;
-
+  const [chatChannelId, setChatChannelId] = useState<string | null>(null);
   const [showChat, setShowChat] = useState(false);
 
   const [sideToasts, setSideToasts] = useState<
@@ -223,27 +219,44 @@ export const Workspace: React.FC = () => {
     [navigate],
   );
 
+  async function buildChatChannelId(matchId: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(matchId);
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    return `match_${hashHex.slice(0, 24)}`;
+  }
+
   React.useEffect(() => {
     if (!state?.requestId || !state?.peerMatchRequestId) {
       setIsSessionLoading(false);
       return;
     }
 
+    let mounted = true;
+
     const computeId = [state.requestId, state.peerMatchRequestId]
       .sort()
       .join(":");
+
     setSessionId(computeId);
 
-    let mounted = true;
+    void buildChatChannelId(computeId).then((id) => {
+      if (mounted) {
+        setChatChannelId(id);
+      }
+    });
 
     const initSession = async () => {
       let retryCount = 0;
-      const maxRetries = 15; // Wait up to 15 seconds for backend to initialize
+      const maxRetries = 15;
 
       const poll = async () => {
         if (!mounted) return;
         try {
-          // 1. check if session already exists (initialized by backend consumer)
           const sessionRes = await fetch(
             `/api/collaboration/sessions/${computeId}`,
             {
@@ -268,7 +281,6 @@ export const Workspace: React.FC = () => {
               setCurrentLanguage(sessionData.language);
             }
 
-            // 2. fetch question details from questionId provided by backend
             const qRes = await fetch(
               `/api/questions/${sessionData.questionId}`,
             );
@@ -276,6 +288,7 @@ export const Workspace: React.FC = () => {
               const qData = await qRes.json();
               if (mounted) setQuestion(qData);
             }
+
             if (mounted) setIsSessionLoading(false);
             return;
           }

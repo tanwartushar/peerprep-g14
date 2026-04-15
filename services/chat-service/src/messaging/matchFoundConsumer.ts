@@ -1,5 +1,6 @@
 import amqp from "amqplib";
 import { streamServerClient } from "../stream";
+import crypto from "crypto";
 
 type MatchFoundEventPayload = {
   eventType: "match.found";
@@ -20,7 +21,7 @@ type MatchFoundEventPayload = {
 };
 
 const RABBITMQ_URL = process.env.RABBITMQ_URL || "amqp://rabbitmq:5672";
-const MATCHING_EXCHANGE = process.env.MATCHING_EXCHANGE || "matching";
+const MATCHING_EXCHANGE = process.env.MATCHING_EXCHANGE || "matching.events";
 const CHAT_QUEUE = process.env.CHAT_MATCH_FOUND_QUEUE || "chat.match.found";
 
 export async function startMatchFoundConsumer(): Promise<void> {
@@ -44,7 +45,13 @@ export async function startMatchFoundConsumer(): Promise<void> {
         return;
       }
 
-      const channelId = `match_${payload.matchId.replace(":", "_")}`;
+      const channelId =
+        "match_" +
+        crypto
+          .createHash("sha256")
+          .update(payload.matchId)
+          .digest("hex")
+          .slice(0, 24);
 
       await streamServerClient.upsertUsers([
         { id: payload.userAId },
