@@ -160,6 +160,8 @@ export async function publishMatchTimedOut(
 /** Publish timeouts and matches from a successful `tryMatchQueue` run. */
 export async function publishMatchQueueEffects(effects: {
   timedOutRows: Array<{ id: string; userId: string }>;
+  /** Present when `tryMatchQueue` expired reconnect grace rows (Rabbit hooks may use later). */
+  reconnectExpiredPairs?: Array<{ id: string; userId: string }>;
   matches: MatchFoundEventPayload[];
 }): Promise<void> {
   for (const r of effects.timedOutRows) {

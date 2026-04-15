@@ -151,6 +151,9 @@ app.use(
   createProxyMiddleware({
     target: 'http://matching-service:3003',
     changeOrigin: true,
+    /** SSE streams can stay open for the whole match wait. */
+    timeout: 3_600_000,
+    proxyTimeout: 3_600_000,
     pathRewrite: (path: string) => {
       const [pathname, search] = path.split('?');
       const nextPath = '/matching' + (pathname || '');

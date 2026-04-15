@@ -281,6 +281,17 @@ export async function getActiveMatchRequest(
   return { ok: false, status: res.status, message };
 }
 
+/** When false, the app talks to matching over a full URL and cannot attach `x-user-id`; use HTTP polling only. */
+export function matchingApiUsesGatewayProxy(): boolean {
+  return !getMatchingApiPrefix().startsWith("http");
+}
+
+/** Relative or absolute URL for `EventSource` (same shape as GET detail, streamed as SSE). */
+export function getMatchRequestSseUrl(requestId: string): string {
+  const prefix = getMatchingApiPrefix();
+  return `${prefix}/requests/${encodeURIComponent(requestId)}/events`;
+}
+
 export async function getMatchRequest(
   effectiveUserId: string | null,
   requestId: string,

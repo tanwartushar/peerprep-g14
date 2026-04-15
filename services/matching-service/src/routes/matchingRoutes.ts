@@ -13,6 +13,10 @@ import {
 } from "../services/matchRequestService.js";
 import { requireUserId } from "../middleware/requireUserId.js";
 import { sendMatchingServerError } from "../http/sendMatchingServerError.js";
+import {
+  subscribeMatchRequestSse,
+  unsubscribeMatchRequestSse,
+} from "../sse/matchRequestSseHub.js";
 
 const router = Router();
 
@@ -54,6 +58,66 @@ router.get(
         return;
       }
       res.status(200).json(row);
+    } catch (e) {
+      sendMatchingServerError(req, res, e);
+    }
+  },
+);
+
+router.get(
+  "/requests/:id/events",
+  requireUserId,
+  async (req: Request, res: Response) => {
+    const userId = req.userId!;
+    const id = req.params["id"];
+    if (typeof id !== "string") {
+      res.status(400).json({ error: "Invalid request id" });
+      return;
+    }
+    try {
+      const row = await getMatchRequestForUser(id, userId);
+      if (!row) {
+        res.status(404).json({ error: "Match request not found" });
+        return;
+      }
+
+      res.status(200);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+      if (typeof res.flushHeaders === "function") {
+        res.flushHeaders();
+      }
+
+      const writeSse = (event: string, data: unknown): void => {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      writeSse("snapshot", row);
+      subscribeMatchRequestSse(id, res);
+
+      const pingMs = 25_000;
+      const ping = setInterval(() => {
+        if (res.writableEnded) {
+          return;
+        }
+        try {
+          res.write(`: ping ${Date.now()}\n\n`);
+        } catch {
+          /* ignore */
+        }
+      }, pingMs);
+
+      let cleaned = false;
+      const cleanup = (): void => {
+        if (cleaned) return;
+        cleaned = true;
+        clearInterval(ping);
+        unsubscribeMatchRequestSse(id, res);
+      };
+      req.on("close", cleanup);
+      res.on("close", cleanup);
     } catch (e) {
       sendMatchingServerError(req, res, e);
     }

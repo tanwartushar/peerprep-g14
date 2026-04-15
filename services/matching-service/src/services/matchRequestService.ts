@@ -21,6 +21,7 @@ import {
   findFirstPair,
   type MatchRequestRow as EngineMatchRequestRow,
 } from "./matchingEngine.js";
+import { broadcastMatchRequestDto } from "../sse/matchRequestSseHub.js";
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 type MRUpdateManyData = Prisma.MatchRequestUncheckedUpdateManyInput;
@@ -132,21 +133,39 @@ function toEngineRow(r: MatchRequestRow): EngineMatchRequestRow {
  */
 async function expirePendingRequests(
   tx: Prisma.TransactionClient | typeof prisma,
-): Promise<MatchRequestRow[]> {
+): Promise<{
+  timedOutRows: MatchRequestRow[];
+  reconnectExpiredPairs: { id: string; userId: string }[];
+}> {
   const now = new Date();
 
-  await tx.matchRequest.updateMany({
+  const reconnectCandidates = await tx.matchRequest.findMany({
     where: {
       status: "PENDING",
       disconnectedAt: { not: null },
       reconnectDeadlineAt: { lte: now },
     } as MRWhere,
-    data: {
-      status: "RECONNECT_EXPIRED",
-      disconnectedAt: null,
-      reconnectDeadlineAt: null,
-    } as unknown as MRUpdateManyData,
   });
+  const reconnectExpiredPairs = reconnectCandidates.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+  }));
+
+  if (reconnectExpiredPairs.length > 0) {
+    await tx.matchRequest.updateMany({
+      where: {
+        id: { in: reconnectExpiredPairs.map((p) => p.id) },
+        status: "PENDING",
+        disconnectedAt: { not: null },
+        reconnectDeadlineAt: { lte: now },
+      } as MRWhere,
+      data: {
+        status: "RECONNECT_EXPIRED",
+        disconnectedAt: null,
+        reconnectDeadlineAt: null,
+      } as unknown as MRUpdateManyData,
+    });
+  }
 
   const cutoff = pendingMatchTimeoutCutoff();
   const toTimeOut = await tx.matchRequest.findMany({
@@ -157,7 +176,7 @@ async function expirePendingRequests(
     } as MRWhere,
   });
   if (toTimeOut.length === 0) {
-    return [];
+    return { timedOutRows: [], reconnectExpiredPairs };
   }
 
   await tx.matchRequest.updateMany({
@@ -166,11 +185,15 @@ async function expirePendingRequests(
     } as MRWhere,
     data: { status: "TIMED_OUT" } as unknown as MRUpdateManyData,
   });
-  return toTimeOut.map((r) => asMatchRow(r));
+  return {
+    timedOutRows: toTimeOut.map((r) => asMatchRow(r)),
+    reconnectExpiredPairs,
+  };
 }
 
 export type MatchQueueEffects = {
   timedOutRows: MatchRequestRow[];
+  reconnectExpiredPairs: { id: string; userId: string }[];
   matches: MatchFoundEventPayload[];
 };
 
@@ -234,12 +257,51 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
   };
 }
 
+/** Read-through DTO without running the matcher (used for SSE after queue effects already ran). */
+async function loadMatchRequestDtoForUserNoSideEffect(
+  id: string,
+  userId: string,
+): Promise<MatchRequestDTO | null> {
+  const row = await prisma.matchRequest.findFirst({
+    where: { id, userId } as MRWhere,
+  });
+  return row ? toDTO(asMatchRow(row)) : null;
+}
+
+async function notifyMatchRequestSseAfterQueueEffects(
+  q: MatchQueueEffects,
+): Promise<void> {
+  for (const p of q.reconnectExpiredPairs) {
+    const dto = await loadMatchRequestDtoForUserNoSideEffect(p.id, p.userId);
+    if (dto) broadcastMatchRequestDto(p.id, dto);
+  }
+  for (const r of q.timedOutRows) {
+    const dto = await loadMatchRequestDtoForUserNoSideEffect(r.id, r.userId);
+    if (dto) broadcastMatchRequestDto(r.id, dto);
+  }
+  for (const m of q.matches) {
+    const dtoA = await loadMatchRequestDtoForUserNoSideEffect(
+      m.requestAId,
+      m.userAId,
+    );
+    const dtoB = await loadMatchRequestDtoForUserNoSideEffect(
+      m.requestBId,
+      m.userBId,
+    );
+    if (dtoA) broadcastMatchRequestDto(m.requestAId, dtoA);
+    if (dtoB) broadcastMatchRequestDto(m.requestBId, dtoB);
+  }
+}
+
 export async function tryMatchQueue(): Promise<MatchQueueEffects> {
   const timedOutRows: MatchRequestRow[] = [];
   const matches: MatchFoundEventPayload[] = [];
+  let reconnectExpiredPairs: { id: string; userId: string }[] = [];
 
   await prisma.$transaction(async (tx) => {
-    timedOutRows.push(...(await expirePendingRequests(tx)));
+    const expired = await expirePendingRequests(tx);
+    timedOutRows.push(...expired.timedOutRows);
+    reconnectExpiredPairs = expired.reconnectExpiredPairs;
 
     while (true) {
       const pendingRows = await tx.matchRequest.findMany({
@@ -303,7 +365,7 @@ export async function tryMatchQueue(): Promise<MatchQueueEffects> {
     }
   });
 
-  return { timedOutRows, matches };
+  return { timedOutRows, reconnectExpiredPairs, matches };
 }
 
 /**
@@ -314,10 +376,16 @@ async function tryMatchQueueAndPublish(): Promise<void> {
   try {
     const q = await tryMatchQueue();
     await publishMatchQueueEffects(q);
+    await notifyMatchRequestSseAfterQueueEffects(q);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[matching] tryMatchQueueAndPublish failed: ${msg}`);
   }
+}
+
+/** Matcher + Rabbit + SSE fan-out; safe to call from a background tick. */
+export async function runMatchQueueTick(): Promise<void> {
+  await tryMatchQueueAndPublish();
 }
 
 export async function createMatchRequest(
@@ -408,7 +476,9 @@ export async function disconnectMatchRequestForUser(
   }
 
   if (r0.disconnectedAt !== null) {
-    return { ok: true, data: toDTO(r0) };
+    const d = toDTO(r0);
+    broadcastMatchRequestDto(id, d);
+    return { ok: true, data: d };
   }
 
   const now = new Date();
@@ -441,7 +511,9 @@ export async function disconnectMatchRequestForUser(
       return { ok: false, code: "NOT_PENDING" };
     }
     await tryMatchQueueAndPublish();
-    return { ok: true, data: toDTO(ra) };
+    const dRa = toDTO(ra);
+    broadcastMatchRequestDto(id, dRa);
+    return { ok: true, data: dRa };
   }
 
   const refreshed = await prisma.matchRequest.findFirst({
@@ -451,7 +523,9 @@ export async function disconnectMatchRequestForUser(
     return { ok: false, code: "NOT_FOUND" };
   }
   await tryMatchQueueAndPublish();
-  return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+  const dRef = toDTO(asMatchRow(refreshed));
+  broadcastMatchRequestDto(id, dRef);
+  return { ok: true, data: dRef };
 }
 
 export async function reconnectMatchRequestForUser(
@@ -526,7 +600,9 @@ export async function reconnectMatchRequestForUser(
         if (!after) {
           return { ok: false, code: "NOT_FOUND" };
         }
-        return { ok: true, data: toDTO(asMatchRow(after)) };
+        const dAfter = toDTO(asMatchRow(after));
+        broadcastMatchRequestDto(id, dAfter);
+        return { ok: true, data: dAfter };
       }
       if (ag.status !== "PENDING") {
         return { ok: false, code: "NOT_PENDING" };
@@ -569,7 +645,9 @@ export async function reconnectMatchRequestForUser(
       if (!after) {
         return { ok: false, code: "NOT_FOUND" };
       }
-      return { ok: true, data: toDTO(asMatchRow(after)) };
+      const dAfter2 = toDTO(asMatchRow(after));
+      broadcastMatchRequestDto(id, dAfter2);
+      return { ok: true, data: dAfter2 };
     }
     if (ag2.status !== "PENDING") {
       return { ok: false, code: "NOT_PENDING" };
@@ -585,7 +663,9 @@ export async function reconnectMatchRequestForUser(
   if (!refreshed) {
     return { ok: false, code: "NOT_FOUND" };
   }
-  return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+  const dRecon = toDTO(asMatchRow(refreshed));
+  broadcastMatchRequestDto(id, dRecon);
+  return { ok: true, data: dRecon };
 }
 
 export async function cancelMatchRequestForUser(
@@ -655,5 +735,7 @@ export async function cancelMatchRequestForUser(
   }
   await publishMatchRequestCancelled(id, userId);
   await tryMatchQueueAndPublish();
-  return { ok: true, data: toDTO(asMatchRow(updated)) };
+  const cancelledDto = toDTO(asMatchRow(updated));
+  broadcastMatchRequestDto(id, cancelledDto);
+  return { ok: true, data: cancelledDto };
 }

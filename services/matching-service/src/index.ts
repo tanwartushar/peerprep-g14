@@ -3,6 +3,7 @@ import express, { type Application } from "express";
 import type { Server } from "node:http";
 import cors, { type CorsOptions } from "cors";
 import matchingRouter from "./routes/matchingRoutes.js";
+import { runMatchQueueTick } from "./services/matchRequestService.js";
 import { runReadinessChecks } from "./health/readiness.js";
 import { disconnectDatabase } from "./prisma.js";
 import { closeRabbitMq } from "./messaging/rabbitmqPublisher.js";
@@ -136,3 +137,14 @@ process.once("SIGINT", () => {
 server = app.listen(PORT, () => {
   console.log(`matching-service listening on http://localhost:${PORT}`);
 });
+
+/** Lets matches resolve while users only hold an SSE connection (no GET polling). */
+const matchQueueTickMs = Number.parseInt(
+  process.env.MATCH_QUEUE_TICK_MS ?? "4000",
+  10,
+);
+if (Number.isFinite(matchQueueTickMs) && matchQueueTickMs > 0) {
+  setInterval(() => {
+    void runMatchQueueTick();
+  }, matchQueueTickMs);
+}
