@@ -22,18 +22,12 @@ func RedisConnect() *redis.Client{
 		DB:       0,
 	})
 
-	rdb.Set(ctx, "foo", "bar", 0)
-	result, err := rdb.Get(ctx, "foo").Result()
-
+	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		panic(err)
+		fmt.Printf("Warning: Redis ping failed: %v\n", err)
+	} else {
+		fmt.Println("Redis connected successfully")
 	}
-	defer func() {
-        if err := rdb.Close(); err != nil {
-            fmt.Printf("Error closing Redis: %v\n", err)
-        }
-    }()
 
-	fmt.Println(result) // >>> bar
 	return rdb
 }

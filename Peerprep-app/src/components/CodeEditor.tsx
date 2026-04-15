@@ -15,6 +15,7 @@ interface CodeEditorProps {
     currentUser?: { name: string; color: string };
     onSystemTerminate?: (reason: string) => void;
     onPartnerPresenceChange?: (isPresent: boolean) => void;
+    onYdocReady?: (ydoc: Y.Doc) => void;
     onPeerTranslation?: (language: string) => void;
     onLanguageChangeRequest?: (language: string) => void;
     onLanguageChangeApproved?: (language: string) => void;
@@ -36,7 +37,7 @@ export interface CodeEditorHandle {
 
 const PEER_ENDED_MSG = 'This Session has been ended by a peer. Returning to Dashboard.';
 
-export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange, onPeerTranslation, onLanguageChangeRequest, onLanguageChangeApproved, onLanguageChangeResponse, onTranslationApprovalRequest, onTranslationApprovalResponse }, ref) => {
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onYdocReady, onPartnerPresenceChange, onPeerTranslation, onLanguageChangeRequest, onLanguageChangeApproved, onLanguageChangeResponse, onTranslationApprovalRequest, onTranslationApprovalResponse }, ref) => {
     const { userId } = useAuth();
     const editorRef = useRef<any>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
@@ -181,8 +182,9 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
 
         const ydoc = new Y.Doc();
         ydocRef.current = ydoc;
+        onYdocReady?.(ydoc);
 
-        // const wsUrl = 'ws://localhost/api/collaboration/ws'; 
+        // const wsUrl = 'ws://localhost/api/collaboration/ws';
         const wsUrl = 'https://backend-server-kppd.onrender.com/api/collaboration/ws';
 
         const provider = new WebsocketProvider(wsUrl, sessionId, ydoc, {
