@@ -1,5 +1,5 @@
 import React from "react";
-import { Edit2, Filter, Plus, Trash2 } from "lucide-react";
+import { Filter, Plus, Trash2 } from "lucide-react";
 import QuestionTable, {
   type QuestionDifficulty,
   type QuestionTableTheme,
