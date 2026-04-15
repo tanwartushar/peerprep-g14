@@ -106,7 +106,7 @@ services:
       - ./services/matching-service/.env
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+      - RABBITMQ_URL=amqps://b-2c1fdf96-24c3-463c-9cea-b45dd122b90a.mq.ap-southeast-1.on.aws:5671
     depends_on:
       rabbitmq:
         condition: service_healthy
