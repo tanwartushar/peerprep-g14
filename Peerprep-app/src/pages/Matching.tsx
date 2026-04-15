@@ -34,6 +34,7 @@ interface LocationState {
 /** When matching is called via a direct service URL, `EventSource` cannot send `x-user-id`; use polling. */
 const LEGACY_POLL_MS_VISIBLE = 2000;
 const LEGACY_POLL_MS_HIDDEN = 12_000;
+/** Rare GET when SSE is primary — catches silent proxy drops. */
 const SSE_FALLBACK_POLL_MS = 45_000;
 
 export const Matching: React.FC = () => {
