@@ -29,7 +29,7 @@ setInterval(() => {
 
 router.post('/', async (req: any, res: any) => {
   try {
-    const { code, preferences, question } = req.body;
+    const { code, preferences, question, language } = req.body;
 
     // validate inputs
     if (!code || typeof code !== 'string' || code.trim().length === 0) {
@@ -55,6 +55,10 @@ router.post('/', async (req: any, res: any) => {
 
     let prompt = `You are an expert programming assistant. Please provide an explanation for the following code.\n`;
     
+    if (language) {
+      prompt += `\nIMPORTANT REQUIREMENT: The code is expected to be written in ${language}. If the provided code is clearly NOT written in ${language}, you MUST reply ONLY with: "The provided code is not written in ${language}." Do not provide any explanation.\n`;
+    }
+
     if (question) {
        prompt += `\nThe code is a solution to the following question:\n${question}\n`;
     }

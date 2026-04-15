@@ -37,7 +37,8 @@ export class SessionService {
             if (qRes.ok) {
                 const qList = await qRes.json();
                 if (Array.isArray(qList) && qList.length > 0) {
-                    questionId = qList[0].id || qList[0]._id;
+                    const randomIndex = Math.floor(Math.random() * qList.length);
+                    questionId = qList[randomIndex].id || qList[randomIndex]._id;
                 }
             }
 
@@ -47,7 +48,8 @@ export class SessionService {
                 if (fbRes.ok) {
                     const fbList = await fbRes.json();
                     if (Array.isArray(fbList) && fbList.length > 0) {
-                        questionId = fbList[0].id || fbList[0]._id;
+                        const randomIndex = Math.floor(Math.random() * fbList.length);
+                        questionId = fbList[randomIndex].id || fbList[randomIndex]._id;
                     }
                 }
             }
@@ -58,7 +60,8 @@ export class SessionService {
                 if (anyRes.ok) {
                     const anyList = await anyRes.json();
                     if (Array.isArray(anyList) && anyList.length > 0) {
-                        questionId = anyList[0].id || anyList[0]._id;
+                        const randomIndex = Math.floor(Math.random() * anyList.length);
+                        questionId = anyList[randomIndex].id || anyList[randomIndex]._id;
                     }
                 }
             }
