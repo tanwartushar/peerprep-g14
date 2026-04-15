@@ -53,7 +53,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       // 3. SET THE COOKIE HERE (On the actual response going to user)
       res.cookie('accessToken', newAccessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // MUST be false for plain http
         sameSite: 'lax',
         maxAge: 15 * 60 * 1000
       });
@@ -89,15 +89,21 @@ app.post('/api/auth/logout', async (req: any, res: any) => {
 
   res.clearCookie('accessToken', {
     httpOnly: true,
+    secure: false, // MUST be false for plain http
     sameSite: 'lax',
   });
 
   res.clearCookie('refreshToken', {
     httpOnly: true,
+    secure: false, // MUST be false for plain http
     sameSite: 'lax',
   });
 
   return res.status(200).json({ message: "Logged out successfully" });
+});
+
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200).send('OK');
 });
 
 // New endpoint for frontend to verify session validity

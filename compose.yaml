@@ -28,7 +28,7 @@ services:
       - "3000:3000"
     build:
       context: ./services/auth-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     depends_on:
       - user-service
@@ -70,7 +70,7 @@ services:
       - "3001:3001"
     build:
       context: ./services/user-service # Path to your user service folder
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -100,7 +100,7 @@ services:
       - "3003:3003"
     build:
       context: ./services/matching-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/matching-service/.env
@@ -174,7 +174,7 @@ services:
       - ./services/collaboration-service/.env
     build:
       context: ./services/collaboration-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -195,7 +195,7 @@ services:
       - "3006:3006"
     build:
       context: ./services/code-execution-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     env_file:
       - ./services/code-execution-service/.env
     environment:
@@ -211,7 +211,7 @@ services:
       - "3005:3005"
     build:
       context: ./services/ai-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/ai-service/.env
