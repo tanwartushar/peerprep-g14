@@ -12,16 +12,9 @@ import {
   reconnectMatchRequestForUser,
 } from "../services/matchRequestService.js";
 import { requireUserId } from "../middleware/requireUserId.js";
+import { sendMatchingServerError } from "../http/sendMatchingServerError.js";
 
 const router = Router();
-
-/** Same shape as other handlers; used when Prisma/IO throws unexpectedly. */
-const SERVER_ERROR_BODY = { error: "Could not complete the request" } as const;
-
-function sendServerError(res: Response, err: unknown): void {
-  console.error("[matching-routes]", err);
-  res.status(500).json(SERVER_ERROR_BODY);
-}
 
 router.post(
   "/requests",
@@ -44,7 +37,7 @@ router.post(
         res.status(400).json({ error: "Validation failed", details: e.issues });
         return;
       }
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );
@@ -62,7 +55,7 @@ router.get(
       }
       res.status(200).json(row);
     } catch (e) {
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );
@@ -85,7 +78,7 @@ router.get(
       }
       res.status(200).json(row);
     } catch (e) {
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );
@@ -128,7 +121,7 @@ router.delete(
         error: "Only pending match requests can be cancelled",
       });
     } catch (e) {
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );
@@ -157,7 +150,7 @@ router.post(
         error: "Only an active waiting match request can be marked disconnected",
       });
     } catch (e) {
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );
@@ -199,7 +192,7 @@ router.post(
         error: "Only a pending match request can be reconnected",
       });
     } catch (e) {
-      sendServerError(res, e);
+      sendMatchingServerError(req, res, e);
     }
   },
 );

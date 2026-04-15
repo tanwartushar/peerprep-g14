@@ -8,7 +8,10 @@ import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
 import { createMatchRequest, getActiveMatchRequest } from "../api/matching";
 import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
-import { setActiveMatchRequestId } from "../matching/matchingSession";
+import {
+  getActiveMatchRequestId,
+  setActiveMatchRequestId,
+} from "../matching/matchingSession";
 import {
   loadMatchFormDraft,
   saveMatchFormDraft,
@@ -33,61 +36,68 @@ export const Dashboard: React.FC = () => {
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** False until we finish “resume” checks so we don’t double-submit before redirect to /matching. */
+  const [resumeCheckDone, setResumeCheckDone] = useState(false);
   const dashboardTheme = "user";
 
   useEffect(() => {
-    if (isLoading || !userId) return;
+    if (isLoading) return;
+    if (!userId) {
+      setResumeCheckDone(true);
+      return;
+    }
     let mounted = true;
 
     const checkActiveSession = async () => {
+      const effId = getEffectiveMatchingUserId(userId);
+      if (!effId) {
+        if (mounted) setResumeCheckDone(true);
+        return;
+      }
+
       try {
-        const res = await fetch('/api/collaboration/sessions/active', {
-          credentials: 'include'
+        const res = await fetch("/api/collaboration/sessions/active", {
+          credentials: "include",
         });
         if (res.ok && res.status !== 204 && mounted) {
           const session = await res.json();
-          // termination validation: alert offline returning users
           if (session.status === "terminated") {
             const shownKey = `notified_termination_${session.id}`;
             if (!sessionStorage.getItem(shownKey)) {
-              // Rely on terminatedBy rather than terminateReason since the DB
-              // always stores 'Deliberate' due to Docker build cache on local services.
-              // If the terminator is someone else, this user was offline.
-              if (session.terminatedBy !== userId && session.terminatedBy !== 'anonymous') {
-                alert("Your previous session has ended. You can find a new match from the Dashboard.");
+              if (
+                session.terminatedBy !== userId &&
+                session.terminatedBy !== "anonymous"
+              ) {
+                alert(
+                  "Your previous session has ended. You can find a new match from the Dashboard.",
+                );
               }
               sessionStorage.setItem(shownKey, "true");
             }
+            // Still check for a pending match below (user may have left matching UI).
+          } else if (session.status === "active") {
+            const part1 = session.id.slice(0, 36);
+            const part2 = session.id.slice(37);
+            const isUser1 = session.user1Id === (effId || userId);
+            navigate("/workspace", {
+              state: {
+                requestId: part1,
+                peerMatchRequestId: part2,
+                programmingLanguage: session.language,
+                peerUserId: isUser1 ? session.user2Id : session.user1Id,
+                difficulty: "",
+                topic: "",
+              },
+            });
+            if (mounted) setResumeCheckDone(true);
             return;
           }
-          // only resume an actually active session (terminated rows must not trap users in a WS loop)
-          if (session.status !== "active") {
-            return;
-          }
-          // extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
-          const part1 = session.id.slice(0, 36);
-          const part2 = session.id.slice(37);
-          const effId = getEffectiveMatchingUserId(userId);
-          const isUser1 = session.user1Id === (effId || userId);
-
-          navigate('/workspace', {
-            state: {
-              requestId: part1,
-              peerMatchRequestId: part2,
-              programmingLanguage: session.language,
-              peerUserId: isUser1 ? session.user2Id : session.user1Id,
-              difficulty: '',
-              topic: ''
-            }
-          });
-          return;
+          // Non-active session row (e.g. stale): fall through — check matching queue next.
         }
-      } catch (e) {
-        // dashboard renders normally
+      } catch {
+        /* collaboration unavailable — still try matching active */
       }
 
-      const effId = getEffectiveMatchingUserId(userId);
-      if (!effId || !mounted) return;
       try {
         const matchRes = await getActiveMatchRequest(effId);
         if (!mounted) return;
@@ -107,11 +117,15 @@ export const Dashboard: React.FC = () => {
         }
       } catch {
         /* ignore */
+      } finally {
+        if (mounted) setResumeCheckDone(true);
       }
     };
 
     void checkActiveSession();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [userId, isLoading, navigate]);
 
   useEffect(() => {
@@ -165,8 +179,24 @@ export const Dashboard: React.FC = () => {
         return;
       }
       if (result.status === 409) {
+        const existing = await getActiveMatchRequest(effectiveId);
+        if (existing.ok && existing.data.status === "PENDING") {
+          setActiveMatchRequestId(existing.data.id);
+          navigate("/matching", {
+            state: {
+              requestId: existing.data.id,
+              topic: existing.data.topic,
+              difficulty: existing.data.difficulty,
+              programmingLanguage: existing.data.programmingLanguage,
+              allowLowerDifficultyMatch: existing.data.allowLowerDifficultyMatch,
+              timeAvailableMinutes:
+                existing.data.timeAvailableMinutes ?? undefined,
+            },
+          });
+          return;
+        }
         setSubmitError(
-          "You already have an active match request. Cancel it from the matching screen or wait.",
+          "You already have an active match request. Open the matching screen or wait.",
         );
         return;
       }
@@ -213,6 +243,34 @@ export const Dashboard: React.FC = () => {
     { value: "45", label: "45 minutes" },
     { value: "60", label: "60 minutes" },
   ];
+
+  if (!resumeCheckDone) {
+    /** Only then is “resume” copy honest (e.g. first login has no stored match id). */
+    const mayResumeMatch =
+      typeof window !== "undefined" && Boolean(getActiveMatchRequestId());
+    return (
+      <div className="dashboard-page animate-fade-in">
+        <div className="dashboard-layout">
+          <div className="dashboard-main-container">
+            <Card
+              theme={dashboardTheme}
+              logo={<Target className="h-5 w-5" />}
+              title="Configure Session"
+              headerAlign="left"
+              showDivider
+              className="dashboard-content"
+            >
+              <p className="text-secondary text-sm" role="status">
+                {mayResumeMatch
+                  ? "Checking for an active session or match…"
+                  : "Loading dashboard…"}
+              </p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-page animate-fade-in">
