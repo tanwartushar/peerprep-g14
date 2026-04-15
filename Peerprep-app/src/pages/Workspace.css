@@ -22,9 +22,11 @@
 .workspace-match-banner {
   flex-shrink: 0;
   padding: 0.65rem 1.5rem;
-  background: linear-gradient(90deg,
-      rgb(var(--user-600-rgb) / 0.18),
-      rgb(var(--user-400-rgb) / 0.1));
+  background: linear-gradient(
+    90deg,
+    rgb(var(--user-600-rgb) / 0.18),
+    rgb(var(--user-400-rgb) / 0.1)
+  );
   border-bottom: 1px solid rgb(var(--user-400-rgb) / 0.18);
   font-size: 0.875rem;
   color: var(--user-200);
@@ -263,8 +265,6 @@
   overflow: hidden;
 }
 
-
-
 /* Console */
 .editor-console {
   height: 200px;
@@ -486,7 +486,9 @@
   font-weight: 500;
   cursor: pointer;
   border: none;
-  transition: background-color 0.15s ease, transform 0.1s ease;
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease;
 }
 
 .translation-modal__btn:active {
@@ -519,7 +521,9 @@
   top: 80px;
   right: 1.5rem;
   z-index: 9500;
-  animation: slideInRight 0.35s ease-out, fadeOut 0.5s ease-in 4.5s forwards;
+  animation:
+    slideInRight 0.35s ease-out,
+    fadeOut 0.5s ease-in 4.5s forwards;
 }
 
 .translation-notification__content {
@@ -581,8 +585,6 @@
   animation: slideInRight 0.35s ease-out;
 }
 
-
-
 /* Protect Monaco's internal icon font so folding chevrons don't turn into dashes */
 .monaco-editor .codicon {
   font-family: "codicon" !important;
@@ -591,4 +593,50 @@
 /* Ensure global box-sizing resets don't squash the gutter */
 .monaco-editor .margin {
   box-sizing: border-box !important;
+}
+
+/* Floating chat panel above the FAB */
+.workspace-chat-panel {
+  position: fixed;
+  right: 2rem;
+  bottom: calc(2rem + 56px + 0.9rem);
+  width: 360px;
+  height: 500px;
+  z-index: 10001;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    rgb(var(--user-900-rgb) / 0.96),
+    rgb(var(--user-950-rgb) / 0.98)
+  );
+  border: 1px solid rgb(var(--user-400-rgb) / 0.24);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.45),
+    0 0 24px rgb(var(--user-400-rgb) / 0.18);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Make Stream Chat fill panel */
+.workspace-chat-panel .str-chat {
+  height: 100%;
+}
+
+.workspace-chat-panel .str-chat__container,
+.workspace-chat-panel .str-chat__channel,
+.workspace-chat-panel .str-chat__main-panel {
+  height: 100%;
+}
+
+/* Optional: keep chat panel usable on smaller screens */
+@media (max-width: 640px) {
+  .workspace-chat-panel {
+    right: 1rem;
+    left: 1rem;
+    width: auto;
+    bottom: calc(1rem + 56px + 0.75rem);
+    height: 55vh;
+  }
 }
