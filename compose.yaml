@@ -19,6 +19,9 @@ services:
       - user-service
       - auth-service
       - question-service
+      - matching-service
+      - code-execution-service
+      - ai-service
 
   auth-service:
     ports:
@@ -185,6 +188,44 @@ services:
           target: /usr/src/app/src
         - action: rebuild
           path: ./services/collaboration-service/package.json
+
+  # --- CODE EXECUTION SERVICE ---
+  code-execution-service:
+    ports:
+      - "3006:3006"
+    build:
+      context: ./services/code-execution-service
+      dockerfile: Dockerfile
+    env_file:
+      - ./services/code-execution-service/.env
+    environment:
+      - QUESTION_SERVICE_URL=http://question-service:3002
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - question-service
+    restart: on-failure
+  # --- AI SERVICE ---
+  ai-service:
+    ports:
+      - "3005:3005"
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile
+    tty: true
+    env_file:
+      - ./services/ai-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/ai-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/ai-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/ai-service/package.json
 
 volumes:
   prometheus_data: {}

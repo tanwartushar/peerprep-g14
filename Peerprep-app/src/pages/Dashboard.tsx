@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   BookOpen,
   Target,
@@ -26,6 +26,8 @@ import {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const stateFromNav = location.state as any;
   const { userId, isLoading } = useAuth();
   const [difficulty, setDifficulty] = useState(
     () => loadMatchFormDraft()?.difficulty ?? "",
@@ -46,6 +48,15 @@ export const Dashboard: React.FC = () => {
   /** False until we finish “resume” checks so we don’t double-submit before redirect to /matching. */
   const [resumeCheckDone, setResumeCheckDone] = useState(false);
   const dashboardTheme = "user";
+
+  const [topToast, setTopToast] = useState<string | null>(stateFromNav?.sessionNotification || null);
+
+  useEffect(() => {
+      if (topToast) {
+         const t = setTimeout(() => setTopToast(null), 10000);
+         return () => clearTimeout(t);
+      }
+  }, [topToast]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -74,7 +85,7 @@ export const Dashboard: React.FC = () => {
                 session.terminatedBy !== userId &&
                 session.terminatedBy !== "anonymous"
               ) {
-                alert(
+                setTopToast(
                   "Your previous session has ended. You can find a new match from the Dashboard.",
                 );
               }
@@ -279,6 +290,11 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard-page animate-fade-in">
+      {topToast && (
+        <div className="top-toast">
+          <span>{topToast}</span>
+        </div>
+      )}
       <div className="dashboard-layout">
         <div className="dashboard-main-container">
           <Card

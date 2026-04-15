@@ -74,7 +74,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
     constraint: "",
     expectedOutput: "",
     imageUrls: [],
-    matched: 0
+    matched: 0,
   });
 
   const getTopicLabel = (value: string) => {
@@ -87,7 +87,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
       setIsLoading(true);
       const data = await fetchQuestions();
       setQuestions(data);
-      console.log(data)
+      console.log(data);
     } catch (error) {
       console.error("Error loading questions:", error);
     } finally {
@@ -229,7 +229,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
           constraint: question.constraint,
           expectedOutput: question.expectedOutput,
           imageUrls: question.imageUrls,
-          attempts: 0,
+          matched: question.matched,
         }))}
         isLoading={isLoading}
         selectedQuestionId={selectedQuestionId}
