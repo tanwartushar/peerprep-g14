@@ -19,11 +19,6 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
-      "/matching": {
-        target: "http://localhost",
-        changeOrigin: true,
-        secure: false,
-      },
     },
   },
   // plugins: [

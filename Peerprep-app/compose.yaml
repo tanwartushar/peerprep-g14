@@ -2,7 +2,7 @@ services:
   react-prod:
     build:
       context: ./
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     image: docker-reactjs-sample
     ports:
       - "8080:8080"

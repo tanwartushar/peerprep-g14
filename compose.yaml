@@ -17,6 +17,7 @@ services:
     depends_on:
       - frontend
       - user-service
+      - auth-service
       - question-service
       - matching-service
       - code-execution-service
@@ -27,8 +28,11 @@ services:
       - "3000:3000"
     build:
       context: ./services/auth-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
+    depends_on:
+      - user-service
+      - matching-service
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
@@ -66,7 +70,7 @@ services:
       - "3001:3001"
     build:
       context: ./services/user-service # Path to your user service folder
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -96,7 +100,7 @@ services:
       - "3003:3003"
     build:
       context: ./services/matching-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/matching-service/.env
@@ -106,6 +110,18 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3003/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
     volumes:
       - ./services/matching-service/src:/usr/src/app/src
     develop:
@@ -158,7 +174,7 @@ services:
       - ./services/collaboration-service/.env
     build:
       context: ./services/collaboration-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true

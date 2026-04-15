@@ -128,8 +128,8 @@
   align-items: center;
   justify-content: center;
 
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 40px;
+  height: 40px;
   flex-shrink: 0;
 
   border: 2px solid;
@@ -137,5 +137,20 @@
   background-color: var(--header-profile-bg);
   color: var(--header-profile-fg);
   border-radius: var(--radius-full);
-  border-color: var(--header-profile-outline);
+  border: 1px solid rgb(var(--header-accent-rgb) / 1);
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.app-shell-header__profile-picture:hover {
+  transform: translateY(-1px);
+
+  background-color: rgb(var(--header-profile-bg) / 0.2);
+  color: var(--header-profile-bg);
+  border: 1px solid var(--header-accent-soft);
 }

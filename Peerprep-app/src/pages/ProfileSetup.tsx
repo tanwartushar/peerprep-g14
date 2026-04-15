@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Award, Blocks, CheckCircle } from "lucide-react";
+import { Award, Blocks, CheckCircle, UserIcon } from "lucide-react";
 import { TextArea } from "../components/TextArea";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
@@ -12,6 +12,7 @@ import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import { Spinner } from "../components/Spinner";
 import { useUpdateCurrentUserProfile } from "../hooks/useUpdateCurrentUserProfile";
 import Card from "../components/Card";
+import { useRef } from "react";
 
 export const ProfileSetup: React.FC = () => {
   const navigate = useNavigate();
@@ -38,6 +39,8 @@ export const ProfileSetup: React.FC = () => {
   const [learningPurpose, setLearningPurpose] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(() => {
     setName(user?.name ?? "");
   }, [user]);
@@ -58,6 +61,31 @@ export const ProfileSetup: React.FC = () => {
     name.trim() !== "" &&
     experienceLevel.trim() !== "" &&
     learningPurpose.length !== 0;
+
+  const handleUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append("userId", userId!);
+    formData.append("image", file);
+
+    const res = await fetch("http://localhost:3001/profile/picture", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+    });
+
+    const data = await res.json();
+    console.log(data);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    await handleUpload(file);
+
+    // reset so user can re-select the same file later
+    e.target.value = "";
+  };
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -119,6 +147,25 @@ export const ProfileSetup: React.FC = () => {
               <>
                 <form onSubmit={handleSubmit}>
                   <div>
+                    <div className="profile-picture-container">
+                      <button
+                        type="button"
+                        className="profile-picture-avatar"
+                        onClick={() => fileInputRef.current?.click()}
+                        aria-label="Edit Profile Picture"
+                      >
+                        <UserIcon size={72} />
+                      </button>
+
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handleFileChange}
+                      />
+                    </div>
+
                     <Input
                       label="Name"
                       value={name}

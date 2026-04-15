@@ -3,12 +3,12 @@ import prisma from "../prisma.js";
 import {
   getMatchTimeoutSeconds,
   MATCH_REQUEST_TIMEOUT_MESSAGE,
-} from "../config/matchTimeout.js";
-import {
   getReconnectGraceSeconds,
   MATCH_REQUEST_RECONNECT_EXPIRED_MESSAGE,
-} from "../config/reconnectGrace.js";
-import type { CreateMatchRequestInput } from "../validation/matchRequestValidation.js";
+} from "../config/matchLifecycle.js";
+import type {
+  CreateMatchRequestInput,
+} from "../validation/matchRequestValidation.js";
 import type { MatchRequestRow } from "../types/matchRequestRow.js";
 import {
   buildMatchFoundPayload,
@@ -19,8 +19,23 @@ import {
 } from "../messaging/matchingDomainEvents.js";
 import {
   findFirstPair,
+  poolKeyString,
+  type MatchPairResult,
   type MatchRequestRow as EngineMatchRequestRow,
 } from "./matchingEngine.js";
+import { broadcastMatchRequestDto } from "../sse/matchRequestSseHub.js";
+import {
+  publishMatchQueueWork,
+  rabbitMatchQueueEnabled,
+} from "../messaging/rabbitMatchQueue.js";
+import {
+  buildFallbackSuggestions,
+  buildFallbackSuggestionsForTimedOut,
+  type FallbackSuggestionDTO,
+} from "./fallbackSuggestionsBuilder.js";
+import type { AcceptFallbackBody } from "../validation/acceptFallbackValidation.js";
+
+export type { FallbackSuggestionDTO };
 
 type MRWhere = Prisma.MatchRequestWhereInput;
 type MRUpdateManyData = Prisma.MatchRequestUncheckedUpdateManyInput;
@@ -85,6 +100,10 @@ export type MatchRequestDTO = {
   matchTimeoutSeconds: number;
   createdAt: string;
   updatedAt: string;
+  /** Present when `status === "PENDING"` and connected (not in reconnect grace). */
+  waitTimeMs?: number;
+  /** Advisory only; must be explicitly accepted via `POST .../accept-fallback`. */
+  fallbackSuggestions?: FallbackSuggestionDTO[];
 };
 
 function matchingPairTypeToApi(
@@ -132,21 +151,39 @@ function toEngineRow(r: MatchRequestRow): EngineMatchRequestRow {
  */
 async function expirePendingRequests(
   tx: Prisma.TransactionClient | typeof prisma,
-): Promise<MatchRequestRow[]> {
+): Promise<{
+  timedOutRows: MatchRequestRow[];
+  reconnectExpiredPairs: { id: string; userId: string }[];
+}> {
   const now = new Date();
 
-  await tx.matchRequest.updateMany({
+  const reconnectCandidates = await tx.matchRequest.findMany({
     where: {
       status: "PENDING",
       disconnectedAt: { not: null },
       reconnectDeadlineAt: { lte: now },
     } as MRWhere,
-    data: {
-      status: "RECONNECT_EXPIRED",
-      disconnectedAt: null,
-      reconnectDeadlineAt: null,
-    } as unknown as MRUpdateManyData,
   });
+  const reconnectExpiredPairs = reconnectCandidates.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+  }));
+
+  if (reconnectExpiredPairs.length > 0) {
+    await tx.matchRequest.updateMany({
+      where: {
+        id: { in: reconnectExpiredPairs.map((p) => p.id) },
+        status: "PENDING",
+        disconnectedAt: { not: null },
+        reconnectDeadlineAt: { lte: now },
+      } as MRWhere,
+      data: {
+        status: "RECONNECT_EXPIRED",
+        disconnectedAt: null,
+        reconnectDeadlineAt: null,
+      } as unknown as MRUpdateManyData,
+    });
+  }
 
   const cutoff = pendingMatchTimeoutCutoff();
   const toTimeOut = await tx.matchRequest.findMany({
@@ -157,7 +194,7 @@ async function expirePendingRequests(
     } as MRWhere,
   });
   if (toTimeOut.length === 0) {
-    return [];
+    return { timedOutRows: [], reconnectExpiredPairs };
   }
 
   await tx.matchRequest.updateMany({
@@ -166,11 +203,15 @@ async function expirePendingRequests(
     } as MRWhere,
     data: { status: "TIMED_OUT" } as unknown as MRUpdateManyData,
   });
-  return toTimeOut.map((r) => asMatchRow(r));
+  return {
+    timedOutRows: toTimeOut.map((r) => asMatchRow(r)),
+    reconnectExpiredPairs,
+  };
 }
 
 export type MatchQueueEffects = {
   timedOutRows: MatchRequestRow[];
+  reconnectExpiredPairs: { id: string; userId: string }[];
   matches: MatchFoundEventPayload[];
 };
 
@@ -234,23 +275,134 @@ function toDTO(row: MatchRequestRow): MatchRequestDTO {
   };
 }
 
+/**
+ * Public DTO for API/SSE: adds wait time + opt-in fallback suggestions for connected PENDING rows.
+ * Does not change matching semantics.
+ */
+async function toPublicMatchRequestDto(row: MatchRequestRow): Promise<MatchRequestDTO> {
+  const base = toDTO(row);
+  if (row.status === "TIMED_OUT") {
+    const fallbackSuggestions = await buildFallbackSuggestionsForTimedOut(row);
+    return { ...base, fallbackSuggestions };
+  }
+  if (row.status !== "PENDING" || row.disconnectedAt !== null) {
+    return base;
+  }
+  const waitTimeMs = Date.now() - row.createdAt.getTime();
+  const timeoutSec = getMatchTimeoutSeconds();
+  const matchWindowEndMs = row.createdAt.getTime() + timeoutSec * 1000;
+  /**
+   * Past the match-wait window, the matcher will soon set `TIMED_OUT`. Do not show
+   * advisory fallbacks in this gap (or after timeout) — the search has effectively ended.
+   */
+  if (Date.now() >= matchWindowEndMs) {
+    return {
+      ...base,
+      waitTimeMs,
+      fallbackSuggestions: [],
+    };
+  }
+  const fallbackSuggestions = await buildFallbackSuggestions(row, waitTimeMs);
+  return {
+    ...base,
+    waitTimeMs,
+    fallbackSuggestions,
+  };
+}
+
+/** Read-through DTO without running the matcher (used for SSE after queue effects already ran). */
+async function loadMatchRequestDtoForUserNoSideEffect(
+  id: string,
+  userId: string,
+): Promise<MatchRequestDTO | null> {
+  const row = await prisma.matchRequest.findFirst({
+    where: { id, userId } as MRWhere,
+  });
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
+}
+
+async function notifyMatchRequestSseAfterQueueEffects(
+  q: MatchQueueEffects,
+): Promise<void> {
+  for (const p of q.reconnectExpiredPairs) {
+    const dto = await loadMatchRequestDtoForUserNoSideEffect(p.id, p.userId);
+    if (dto) broadcastMatchRequestDto(p.id, dto);
+  }
+  for (const r of q.timedOutRows) {
+    const dto = await loadMatchRequestDtoForUserNoSideEffect(r.id, r.userId);
+    if (dto) broadcastMatchRequestDto(r.id, dto);
+  }
+  for (const m of q.matches) {
+    const dtoA = await loadMatchRequestDtoForUserNoSideEffect(
+      m.requestAId,
+      m.userAId,
+    );
+    const dtoB = await loadMatchRequestDtoForUserNoSideEffect(
+      m.requestBId,
+      m.userBId,
+    );
+    if (dtoA) broadcastMatchRequestDto(m.requestAId, dtoA);
+    if (dtoB) broadcastMatchRequestDto(m.requestBId, dtoB);
+  }
+}
+
 export async function tryMatchQueue(): Promise<MatchQueueEffects> {
   const timedOutRows: MatchRequestRow[] = [];
   const matches: MatchFoundEventPayload[] = [];
+  let reconnectExpiredPairs: { id: string; userId: string }[] = [];
 
   await prisma.$transaction(async (tx) => {
-    timedOutRows.push(...(await expirePendingRequests(tx)));
+    const expired = await expirePendingRequests(tx);
+    timedOutRows.push(...expired.timedOutRows);
+    reconnectExpiredPairs = expired.reconnectExpiredPairs;
 
+    /**
+     * Per-pool matching: load only `(topic, programmingLanguage)` slices (not all PENDING rows).
+     * Order matches `sortedPoolKeys` / F10.1 — same outcome as one global `findFirstPair`, less memory.
+     */
     while (true) {
-      const pendingRows = await tx.matchRequest.findMany({
-        where: { status: "PENDING" } as MRWhere,
+      const pendingPoolKeys = await tx.matchRequest.findMany({
+        where: {
+          status: "PENDING",
+          disconnectedAt: null,
+        } as MRWhere,
+        select: { topic: true, programmingLanguage: true },
+        distinct: ["topic", "programmingLanguage"],
       });
-      const pending = pendingRows
-        .map((r) => asMatchRow(r))
-        .filter((r) => r.disconnectedAt === null);
 
-      const pair = findFirstPair(pending.map(toEngineRow));
-      if (!pair) return;
+      if (pendingPoolKeys.length === 0) {
+        return;
+      }
+
+      const sortedPools = [...pendingPoolKeys].sort((x, y) =>
+        poolKeyString(x.topic, x.programmingLanguage).localeCompare(
+          poolKeyString(y.topic, y.programmingLanguage),
+        ),
+      );
+
+      let pair: MatchPairResult | null = null;
+      for (const { topic, programmingLanguage } of sortedPools) {
+        const pendingRows = await tx.matchRequest.findMany({
+          where: {
+            status: "PENDING",
+            disconnectedAt: null,
+            topic,
+            programmingLanguage,
+          } as MRWhere,
+        });
+        const pending = pendingRows
+          .map((r) => asMatchRow(r))
+          .filter((r) => r.disconnectedAt === null);
+
+        pair = findFirstPair(pending.map(toEngineRow));
+        if (pair !== null) {
+          break;
+        }
+      }
+
+      if (pair === null) {
+        return;
+      }
 
       const { requester: a, partner: b, matchingType } = pair;
 
@@ -303,7 +455,7 @@ export async function tryMatchQueue(): Promise<MatchQueueEffects> {
     }
   });
 
-  return { timedOutRows, matches };
+  return { timedOutRows, reconnectExpiredPairs, matches };
 }
 
 /**
@@ -314,10 +466,36 @@ async function tryMatchQueueAndPublish(): Promise<void> {
   try {
     const q = await tryMatchQueue();
     await publishMatchQueueEffects(q);
+    await notifyMatchRequestSseAfterQueueEffects(q);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error(`[matching] tryMatchQueueAndPublish failed: ${msg}`);
   }
+}
+
+/** Matcher + Rabbit + SSE fan-out; safe to call from a background tick or queue consumer. */
+export async function runMatchQueueTick(): Promise<void> {
+  await tryMatchQueueAndPublish();
+}
+
+/**
+ * When `RABBITMQ_URL` is set, enqueue matcher work (consumer runs `runMatchQueueTick`).
+ * Otherwise runs inline. Falls back to inline if publish fails.
+ */
+export async function scheduleMatchQueueRun(reason: string): Promise<void> {
+  if (rabbitMatchQueueEnabled()) {
+    try {
+      await publishMatchQueueWork(reason);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[matching] publishMatchQueueWork(${reason}) failed: ${msg}; falling back to inline`,
+      );
+      await tryMatchQueueAndPublish();
+    }
+    return;
+  }
+  await tryMatchQueueAndPublish();
 }
 
 export async function createMatchRequest(
@@ -325,7 +503,7 @@ export async function createMatchRequest(
   input: CreateMatchRequestInput,
 ): Promise<{ ok: true; data: MatchRequestDTO } | { ok: false; code: "CONFLICT" }> {
   try {
-    await tryMatchQueueAndPublish();
+    await scheduleMatchQueueRun("create_pre");
 
     const created = await prisma.matchRequest.create({
       data: {
@@ -343,7 +521,7 @@ export async function createMatchRequest(
 
     await publishMatchRequestCreated(asMatchRow(created));
 
-    await tryMatchQueueAndPublish();
+    await scheduleMatchQueueRun("create_post");
 
     const refreshed = await prisma.matchRequest.findUnique({
       where: { id: created.id },
@@ -351,7 +529,7 @@ export async function createMatchRequest(
     if (!refreshed) {
       throw new Error("Match request missing after create");
     }
-    return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+    return { ok: true, data: await toPublicMatchRequestDto(asMatchRow(refreshed)) };
   } catch (e) {
     if (
       e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -367,12 +545,24 @@ export async function getMatchRequestForUser(
   id: string,
   userId: string,
 ): Promise<MatchRequestDTO | null> {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("get_match_request");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
   });
-  return row ? toDTO(asMatchRow(row)) : null;
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
+}
+
+/** At most one PENDING row per user (partial unique index). */
+export async function getActiveMatchRequestForUser(
+  userId: string,
+): Promise<MatchRequestDTO | null> {
+  await scheduleMatchQueueRun("get_active_match_request");
+
+  const row = await prisma.matchRequest.findFirst({
+    where: { userId, status: "PENDING" } as MRWhere,
+  });
+  return row ? toPublicMatchRequestDto(asMatchRow(row)) : null;
 }
 
 export async function disconnectMatchRequestForUser(
@@ -382,7 +572,7 @@ export async function disconnectMatchRequestForUser(
   | { ok: true; data: MatchRequestDTO }
   | { ok: false; code: "NOT_FOUND" | "NOT_PENDING" }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("disconnect");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -396,7 +586,9 @@ export async function disconnectMatchRequestForUser(
   }
 
   if (r0.disconnectedAt !== null) {
-    return { ok: true, data: toDTO(r0) };
+    const d = await toPublicMatchRequestDto(r0);
+    broadcastMatchRequestDto(id, d);
+    return { ok: true, data: d };
   }
 
   const now = new Date();
@@ -428,8 +620,10 @@ export async function disconnectMatchRequestForUser(
     if (ra.status !== "PENDING") {
       return { ok: false, code: "NOT_PENDING" };
     }
-    await tryMatchQueueAndPublish();
-    return { ok: true, data: toDTO(ra) };
+    await scheduleMatchQueueRun("disconnect");
+    const dRa = await toPublicMatchRequestDto(ra);
+    broadcastMatchRequestDto(id, dRa);
+    return { ok: true, data: dRa };
   }
 
   const refreshed = await prisma.matchRequest.findFirst({
@@ -438,8 +632,10 @@ export async function disconnectMatchRequestForUser(
   if (!refreshed) {
     return { ok: false, code: "NOT_FOUND" };
   }
-  await tryMatchQueueAndPublish();
-  return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+  await scheduleMatchQueueRun("disconnect");
+  const dRef = await toPublicMatchRequestDto(asMatchRow(refreshed));
+  broadcastMatchRequestDto(id, dRef);
+  return { ok: true, data: dRef };
 }
 
 export async function reconnectMatchRequestForUser(
@@ -456,7 +652,7 @@ export async function reconnectMatchRequestForUser(
         | "RECONNECT_EXPIRED";
     }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("reconnect");
 
   const row = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -507,14 +703,16 @@ export async function reconnectMatchRequestForUser(
         return { ok: false, code: "RECONNECT_EXPIRED" };
       }
       if (ag.status === "PENDING" && ag.disconnectedAt === null) {
-        await tryMatchQueueAndPublish();
+        await scheduleMatchQueueRun("reconnect");
         const after = await prisma.matchRequest.findFirst({
           where: { id, userId } as MRWhere,
         });
         if (!after) {
           return { ok: false, code: "NOT_FOUND" };
         }
-        return { ok: true, data: toDTO(asMatchRow(after)) };
+        const dAfter = await toPublicMatchRequestDto(asMatchRow(after));
+        broadcastMatchRequestDto(id, dAfter);
+        return { ok: true, data: dAfter };
       }
       if (ag.status !== "PENDING") {
         return { ok: false, code: "NOT_PENDING" };
@@ -550,14 +748,16 @@ export async function reconnectMatchRequestForUser(
     }
     const ag2 = asMatchRow(again);
     if (ag2.disconnectedAt === null && ag2.status === "PENDING") {
-      await tryMatchQueueAndPublish();
+      await scheduleMatchQueueRun("reconnect");
       const after = await prisma.matchRequest.findFirst({
         where: { id, userId } as MRWhere,
       });
       if (!after) {
         return { ok: false, code: "NOT_FOUND" };
       }
-      return { ok: true, data: toDTO(asMatchRow(after)) };
+      const dAfter2 = await toPublicMatchRequestDto(asMatchRow(after));
+      broadcastMatchRequestDto(id, dAfter2);
+      return { ok: true, data: dAfter2 };
     }
     if (ag2.status !== "PENDING") {
       return { ok: false, code: "NOT_PENDING" };
@@ -565,7 +765,7 @@ export async function reconnectMatchRequestForUser(
     return { ok: false, code: "NOT_DISCONNECTED" };
   }
 
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("reconnect");
 
   const refreshed = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -573,7 +773,209 @@ export async function reconnectMatchRequestForUser(
   if (!refreshed) {
     return { ok: false, code: "NOT_FOUND" };
   }
-  return { ok: true, data: toDTO(asMatchRow(refreshed)) };
+  const dRecon = await toPublicMatchRequestDto(asMatchRow(refreshed));
+  broadcastMatchRequestDto(id, dRecon);
+  return { ok: true, data: dRecon };
+}
+
+async function acceptFallbackFromTimedOutRow(
+  userId: string,
+  row: MatchRequestRow,
+  body: AcceptFallbackBody,
+): Promise<
+  | { ok: true; data: MatchRequestDTO }
+  | { ok: false; code: "NOT_APPLICABLE" | "CONFLICT" }
+> {
+  const suggestions = await buildFallbackSuggestionsForTimedOut(row);
+  if (body.type === "enable_downward_matching") {
+    const allowed = suggestions.some(
+      (s) => s.type === "enable_downward_matching",
+    );
+    if (!allowed || row.allowLowerDifficultyMatch) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    return createMatchRequest(userId, {
+      topic: row.topic,
+      difficulty: row.difficulty,
+      programmingLanguage: row.programmingLanguage,
+      allowLowerDifficultyMatch: true,
+      ...(row.timeAvailableMinutes != null
+        ? { timeAvailableMinutes: row.timeAvailableMinutes }
+        : {}),
+    } as CreateMatchRequestInput);
+  }
+  const topic = body.topic;
+  const suggestion = suggestions.find(
+    (s) =>
+      s.type === body.type &&
+      s.action.type === "create_new_request" &&
+      s.action.newCriteria.topic === topic,
+  );
+  if (!suggestion) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+  return createMatchRequest(userId, {
+    topic,
+    difficulty: row.difficulty,
+    programmingLanguage: row.programmingLanguage,
+    allowLowerDifficultyMatch: row.allowLowerDifficultyMatch,
+    ...(row.timeAvailableMinutes != null
+      ? { timeAvailableMinutes: row.timeAvailableMinutes }
+      : {}),
+  } as CreateMatchRequestInput);
+}
+
+/**
+ * User explicitly accepts an advisory fallback. Downward: PATCH in place, preserves `createdAt`.
+ * Topic switch: cancel old PENDING row, create new (new queue position / `createdAt`).
+ * For `TIMED_OUT`, applies the same ideas by creating a new PENDING request (old row unchanged).
+ */
+export async function acceptFallbackSuggestion(
+  userId: string,
+  id: string,
+  body: AcceptFallbackBody,
+): Promise<
+  | { ok: true; data: MatchRequestDTO }
+  | {
+      ok: false;
+      code:
+        | "NOT_FOUND"
+        | "NOT_PENDING"
+        | "DISCONNECTED"
+        | "NOT_APPLICABLE"
+        | "CONFLICT";
+    }
+> {
+  await scheduleMatchQueueRun("accept_fallback_pre");
+
+  const existing = await prisma.matchRequest.findFirst({
+    where: { id, userId } as MRWhere,
+  });
+  if (!existing) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+  const row = asMatchRow(existing);
+  if (row.status === "TIMED_OUT") {
+    return acceptFallbackFromTimedOutRow(userId, row, body);
+  }
+  if (row.status !== "PENDING") {
+    return { ok: false, code: "NOT_PENDING" };
+  }
+  if (row.disconnectedAt !== null) {
+    return { ok: false, code: "DISCONNECTED" };
+  }
+
+  const timeoutSec = getMatchTimeoutSeconds();
+  if (Date.now() >= row.createdAt.getTime() + timeoutSec * 1000) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+
+  const waitTimeMs = Date.now() - row.createdAt.getTime();
+  const suggestions = await buildFallbackSuggestions(row, waitTimeMs);
+
+  if (body.type === "enable_downward_matching") {
+    const allowed =
+      suggestions.some((s) => s.type === "enable_downward_matching") ||
+      row.allowLowerDifficultyMatch;
+    if (!allowed) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    if (row.allowLowerDifficultyMatch) {
+      const fresh = await prisma.matchRequest.findFirst({
+        where: { id, userId } as MRWhere,
+      });
+      if (!fresh) {
+        return { ok: false, code: "NOT_FOUND" };
+      }
+      const dto = await toPublicMatchRequestDto(asMatchRow(fresh));
+      broadcastMatchRequestDto(id, dto);
+      return { ok: true, data: dto };
+    }
+
+    const updated = await prisma.matchRequest.updateMany({
+      where: {
+        id,
+        userId,
+        status: "PENDING",
+        disconnectedAt: null,
+        allowLowerDifficultyMatch: false,
+      } as MRWhere,
+      data: { allowLowerDifficultyMatch: true } as MRUpdateManyData,
+    });
+    if (updated.count === 0) {
+      return { ok: false, code: "NOT_APPLICABLE" };
+    }
+    await scheduleMatchQueueRun("accept_fallback_downward");
+    const refreshed = await prisma.matchRequest.findFirst({
+      where: { id, userId } as MRWhere,
+    });
+    if (!refreshed) {
+      return { ok: false, code: "NOT_FOUND" };
+    }
+    const dto = await toPublicMatchRequestDto(asMatchRow(refreshed));
+    broadcastMatchRequestDto(id, dto);
+    return { ok: true, data: dto };
+  }
+
+  const topic = body.topic;
+  const suggestion = suggestions.find(
+    (s) =>
+      s.type === body.type &&
+      s.action.type === "create_new_request" &&
+      s.action.newCriteria.topic === topic,
+  );
+  if (!suggestion) {
+    return { ok: false, code: "NOT_APPLICABLE" };
+  }
+
+  const createdRow = await prisma.$transaction(async (tx) => {
+    const cur = await tx.matchRequest.findFirst({
+      where: {
+        id,
+        userId,
+        status: "PENDING",
+        disconnectedAt: null,
+      } as MRWhere,
+    });
+    if (!cur) {
+      return null;
+    }
+    const c = asMatchRow(cur);
+    await tx.matchRequest.updateMany({
+      where: { id, userId, status: "PENDING" } as MRWhere,
+      data: {
+        status: "CANCELLED",
+        disconnectedAt: null,
+        reconnectDeadlineAt: null,
+      } as unknown as MRUpdateManyData,
+    });
+    return tx.matchRequest.create({
+      data: {
+        userId,
+        topic,
+        difficulty: c.difficulty,
+        programmingLanguage: c.programmingLanguage,
+        allowLowerDifficultyMatch: c.allowLowerDifficultyMatch,
+        ...(c.timeAvailableMinutes != null
+          ? { timeAvailableMinutes: c.timeAvailableMinutes }
+          : {}),
+        status: "PENDING",
+      } as MRCreateData,
+    });
+  });
+
+  if (!createdRow) {
+    return { ok: false, code: "NOT_FOUND" };
+  }
+
+  await publishMatchRequestCancelled(id, userId);
+  await publishMatchRequestCreated(asMatchRow(createdRow));
+  await scheduleMatchQueueRun("accept_fallback_topic_switch");
+
+  const newId = createdRow.id;
+  const dto = await toPublicMatchRequestDto(asMatchRow(createdRow));
+  broadcastMatchRequestDto(newId, dto);
+  return { ok: true, data: dto };
 }
 
 export async function cancelMatchRequestForUser(
@@ -586,7 +988,7 @@ export async function cancelMatchRequestForUser(
   | { ok: false; code: "TIMED_OUT" }
   | { ok: false; code: "RECONNECT_EXPIRED" }
 > {
-  await tryMatchQueueAndPublish();
+  await scheduleMatchQueueRun("cancel");
 
   const existing = await prisma.matchRequest.findFirst({
     where: { id, userId } as MRWhere,
@@ -642,6 +1044,8 @@ export async function cancelMatchRequestForUser(
     return { ok: false, code: "NOT_FOUND" };
   }
   await publishMatchRequestCancelled(id, userId);
-  await tryMatchQueueAndPublish();
-  return { ok: true, data: toDTO(asMatchRow(updated)) };
+  await scheduleMatchQueueRun("cancel");
+  const cancelledDto = toDTO(asMatchRow(updated));
+  broadcastMatchRequestDto(id, cancelledDto);
+  return { ok: true, data: cancelledDto };
 }

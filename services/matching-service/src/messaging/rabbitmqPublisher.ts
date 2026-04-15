@@ -76,3 +76,30 @@ export async function publishToMatchingExchange(
     throw err;
   }
 }
+
+/**
+ * Close confirm channel and connection if they were opened (graceful shutdown).
+ * Safe to call when RabbitMQ was never used or `RABBITMQ_URL` is unset.
+ */
+export async function closeRabbitMq(): Promise<void> {
+  const ch = channel;
+  const conn = connection;
+  channel = null;
+  connection = null;
+  try {
+    if (ch) {
+      await ch.close();
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[rabbitmq] channel close:", msg);
+  }
+  try {
+    if (conn) {
+      await conn.close();
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[rabbitmq] connection close:", msg);
+  }
+}

@@ -6,13 +6,25 @@ import Sidebar from "../components/Sidebar";
 import { Header } from "../components/Header";
 import { useAuth } from "../context/AuthContext";
 
-const UserLayout: React.FC = () => {
+type LayoutProps = {
+  showHeader?: boolean;
+  showSidebar?: boolean;
+};
+
+const UserLayout: React.FC<LayoutProps> = ({
+  showHeader = true,
+  showSidebar = true,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleProfile = async () => {
+    navigate("user/profile");
+  };
 
   const handleLogout = async () => {
     try {
@@ -61,24 +73,29 @@ const UserLayout: React.FC = () => {
       isSidebarOpen={isSidebarOpen}
       onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
       sidebar={
-        <Sidebar
-          theme="user"
-          isOpen={isSidebarOpen}
-          topItems={topItems}
-          bottomItems={bottomItems}
-        />
+        showSidebar ? (
+          <Sidebar
+            theme="user"
+            isOpen={isSidebarOpen}
+            topItems={topItems}
+            bottomItems={bottomItems}
+          />
+        ) : null
       }
       header={
-        <Header
-          theme="user"
-          showToggle
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
-          showProfile
-          showProfileName
-          showProfilePicture
-          pageName={pageName}
-        />
+        showHeader ? (
+          <Header
+            theme="user"
+            showToggle={showSidebar}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+            showProfile
+            onClickProfile={handleProfile}
+            showProfileName
+            showProfilePicture
+            pageName={pageName}
+          />
+        ) : null
       }
     >
       <Outlet />

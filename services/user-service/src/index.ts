@@ -13,7 +13,12 @@ const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
 const corsOptions: CorsOptions = {
-  origin: "http://localhost:5173",
+  // Use an array to allow both local development and your AWS deployment
+  origin: [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://peerprep-1486465808.ap-southeast-1.elb.amazonaws.com"
+  ],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   credentials: true,
   optionsSuccessStatus: 200,
@@ -27,6 +32,10 @@ app.use(express.json());
 app.use(userRouter);
 app.use(adminRouter);
 app.use(authRouter);
+
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200).send('OK');
+});
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

@@ -2,8 +2,17 @@ import { Router, type Request, type Response } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import prisma from "../prisma.js";
+import multer from "multer";
+import { supabaseAdmin } from "../lib/supabase.js";
 
 const router = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 // Sample route
 router.get("/user/hello", (req: Request, res: Response) => {
@@ -13,9 +22,10 @@ router.get("/user/hello", (req: Request, res: Response) => {
 // 1. Initial trigger: Redirects user to GitHub
 router.get("/user/auth/github", (req: Request, res: Response) => {
   const rootUrl = "https://github.com/login/oauth/authorize";
+  const baseUrl = process.env.BASE_URL || "http://localhost:3000";
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: "http://localhost/user/user/login",
+    redirect_uri: `${baseUrl}/user/user/login`,
     scope: "user:email",
   };
 
@@ -116,20 +126,22 @@ router.get("/user/user/login", async (req: Request, res: Response) => {
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     if (isNewUser) {
-      res.redirect(`http://localhost/profile-setup?userId=${user.id}`);
+      res.redirect(`/#/profile-setup?userId=${user.id}`);
     } else {
-      res.redirect(`http://localhost/dashboard`);
+      res.redirect(`/#/dashboard`);
     }
   } catch (err) {
     console.error("GitHub OAuth Login Error:", err);
@@ -203,5 +215,85 @@ router.patch("/profile", async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to update profile", error });
   }
 });
+
+// Profile-picture update
+router.post(
+  "/profile/picture",
+  upload.single("image"),
+  async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.userId;
+      const file = req.file;
+
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+
+      if (!file) {
+        return res.status(400).json({ message: "Image file is required" });
+      }
+
+      if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+        return res.status(400).json({ message: "Invalid image type" });
+      }
+
+      const existingUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, profileImagePath: true },
+      });
+
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const ext =
+        file.mimetype === "image/png"
+          ? "png"
+          : file.mimetype === "image/webp"
+            ? "webp"
+            : "jpg";
+
+      const newPath = `users/${userId}/avatar-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("profile-pictures")
+        .upload(newPath, file.buffer, {
+          contentType: file.mimetype,
+          upsert: false,
+        });
+
+      if (uploadError) {
+        console.error("Supabase upload error:", uploadError);
+        return res.status(500).json({
+          message: "Failed to upload image",
+          error: uploadError.message,
+        });
+      }
+
+      if (existingUser.profileImagePath) {
+        const { error: deleteError } = await supabaseAdmin.storage
+          .from("profile-pictures")
+          .remove([existingUser.profileImagePath]);
+
+        if (deleteError) {
+          console.error("Old image delete warning:", deleteError);
+        }
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { profileImagePath: newPath },
+      });
+
+      return res.status(200).json({
+        message: "Profile picture uploaded successfully",
+        path: newPath,
+      });
+    } catch (error) {
+      console.error("Upload profile picture error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+);
 
 export default router;
