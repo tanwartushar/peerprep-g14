@@ -19,6 +19,7 @@ services:
       - user-service
       - question-service
       - matching-service
+      - code-execution-service
       - ai-service
 
   auth-service:
@@ -174,13 +175,29 @@ services:
         - action: rebuild
           path: ./services/collaboration-service/package.json
 
+  # --- CODE EXECUTION SERVICE ---
+  code-execution-service:
+    ports:
+      - "3006:3006"
+    build:
+      context: ./services/code-execution-service
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./services/code-execution-service/.env
+    environment:
+      - QUESTION_SERVICE_URL=http://question-service:3002
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - question-service
+    restart: on-failure
   # --- AI SERVICE ---
   ai-service:
     ports:
       - "3005:3005"
     build:
       context: ./services/ai-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/ai-service/.env
