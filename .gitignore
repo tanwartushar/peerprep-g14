@@ -35,3 +35,5 @@ services/question-service/tmp
 # If you use local data volumes for databases
 /data/
 services/question-service/env
+services/ai-service/env
+services/code-execution-service/env
