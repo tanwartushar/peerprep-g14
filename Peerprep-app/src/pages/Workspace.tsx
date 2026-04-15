@@ -103,7 +103,18 @@ export const Workspace: React.FC = () => {
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
   const sessionEndedRef = React.useRef(false);
 
+  // Dynamic Language state
+  const [currentLanguage, setCurrentLanguage] = useState(state?.programmingLanguage || 'javascript');
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const languageDropdownRef = useRef<HTMLDivElement>(null);
+  const [peerLanguageRequestLang, setPeerLanguageRequestLang] = useState<string | null>(null);
+  const [showLanguageRequestModal, setShowLanguageRequestModal] = useState(false);
+
   // Translation state
+  const [pendingTranslation, setPendingTranslation] = useState<{code: string, language: string, timestamp: number} | null>(null);
+  const [pendingLanguageChange, setPendingLanguageChange] = useState<{language: string, timestamp: number} | null>(null);
+  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{language: string, timestamp: number} | null>(null);
+
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const [showTranslateDropdown, setShowTranslateDropdown] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
@@ -157,6 +168,10 @@ export const Workspace: React.FC = () => {
               endSessionOnce("This session has ended. Returning to Dashboard.");
             }
             return;
+          }
+
+          if (sessionData.language) {
+            setCurrentLanguage(sessionData.language);
           }
 
           // fetch question
@@ -266,18 +281,21 @@ export const Workspace: React.FC = () => {
     return () => clearInterval(interval);
   }, [sessionId, isSessionLoading, endSessionOnce]);
 
-  // Close translate dropdown on outside click
+  // close translate and language dropdown on outside click
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (translateDropdownRef.current && !translateDropdownRef.current.contains(e.target as Node)) {
         setShowTranslateDropdown(false);
       }
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(e.target as Node)) {
+        setShowLanguageDropdown(false);
+      }
     };
-    if (showTranslateDropdown) {
+    if (showTranslateDropdown || showLanguageDropdown) {
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [showTranslateDropdown]);
+  }, [showTranslateDropdown, showLanguageDropdown]);
 
   const handleEndSessionInstantly = async () => {
     if (isTerminating || sessionEndedRef.current) return;
@@ -316,7 +334,7 @@ export const Workspace: React.FC = () => {
     else setShowDisconnectModal(false);
   };
 
-  // Translation handlers
+  // translation handlers
   const handleTranslate = async (targetLanguage: string) => {
     setShowTranslateDropdown(false);
     if (!codeEditorRef.current || isTranslating) return;
@@ -365,12 +383,11 @@ export const Workspace: React.FC = () => {
 
   const handleTranslationApprove = () => {
     if (codeEditorRef.current && translationResult) {
-      codeEditorRef.current.setCode(translationResult);
-      codeEditorRef.current.broadcastTranslation(translationTargetLang);
+      const timestamp = Date.now();
+      setPendingTranslation({ code: translationResult, language: translationTargetLang, timestamp });
+      codeEditorRef.current.broadcastTranslationApprovalRequest(translationTargetLang, timestamp);
     }
     setShowTranslationModal(false);
-    setTranslationResult("");
-    setTranslationTargetLang("");
   };
 
   const handlePeerTranslation = useCallback((language: string) => {
@@ -380,6 +397,87 @@ export const Workspace: React.FC = () => {
   const handleDismissNotification = useCallback(() => {
     setPeerTranslationLang(null);
   }, []);
+
+  const handleTranslationApprovalRequest = useCallback((language: string, timestamp: number) => {
+    setPeerTranslationRequestLang({ language, timestamp });
+  }, []);
+
+  const handleTranslationApprovalResponse = useCallback((isApproved: boolean, timestamp: number) => {
+    setPendingTranslation((prev) => {
+      if (prev && prev.timestamp === timestamp) {
+        if (isApproved) {
+          if (codeEditorRef.current) {
+            codeEditorRef.current.setCode(prev.code);
+            codeEditorRef.current.broadcastTranslation(prev.language);
+          }
+        } else {
+          alert('Your request was denied by your peer.');
+        }
+        return null;
+      }
+      return prev;
+    });
+  }, []);
+
+  // Language Change Handlers
+  const handleLanguageSelect = (lang: string) => {
+    setShowLanguageDropdown(false);
+    if (lang === currentLanguage) return;
+    const timestamp = Date.now();
+    setPendingLanguageChange({ language: lang, timestamp });
+    if (codeEditorRef.current) {
+        codeEditorRef.current.broadcastLanguageRequest(lang);
+    }
+  };
+
+  const handleLanguageChangeRequest = useCallback((language: string) => {
+      setPeerLanguageRequestLang(language);
+      setShowLanguageRequestModal(true);
+  }, []);
+
+  const handleLanguageChangeApproved = useCallback((language: string) => {
+      setPendingLanguageChange(null);
+      setCurrentLanguage(language);
+  }, []);
+
+  const handleLanguageChangeResponse = useCallback((isApproved: boolean) => {
+      setPendingLanguageChange(null);
+      if (!isApproved) {
+          alert('Your request was denied by your peer.');
+      }
+  }, []);
+
+  const handleLanguageRequestReject = () => {
+    if (codeEditorRef.current) {
+        codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
+    }
+    setPeerLanguageRequestLang(null);
+    setShowLanguageRequestModal(false);
+  };
+
+  const handleLanguageRequestApprove = async () => {
+      const targetLang = peerLanguageRequestLang;
+      setPeerLanguageRequestLang(null);
+      setShowLanguageRequestModal(false);
+      if (!targetLang) return;
+      
+      setCurrentLanguage(targetLang);
+
+      if (codeEditorRef.current) {
+         codeEditorRef.current.broadcastLanguageApproved(targetLang);
+      }
+
+      try {
+        await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
+           method: 'PATCH',
+           headers: { 'Content-Type': 'application/json' },
+           credentials: 'include',
+           body: JSON.stringify({ language: targetLang })
+        });
+      } catch (err) {
+        console.error('Failed to save language change', err);
+      }
+  };
 
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
   const partnerDifficulty = formatDifficultyLabel(
@@ -394,8 +492,8 @@ export const Workspace: React.FC = () => {
 
   const showMatchBanner = Boolean(state?.peerUserId);
 
-  // Filter out the current language from the translate dropdown
-  const currentLangKey = (state?.programmingLanguage || 'javascript').toLowerCase();
+  // filter out the current language from the translate dropdown
+  const currentLangKey = currentLanguage.toLowerCase();
   const translateLanguages = SUPPORTED_LANGUAGES.filter(
     l => l.value !== currentLangKey && l.value !== (currentLangKey === 'c++' ? 'cpp' : currentLangKey)
   );
@@ -582,7 +680,7 @@ export const Workspace: React.FC = () => {
             <div className="editor-tabs">
               <button className="editor-tab active">
                 <Code2 className="h-4 w-4 mr-2" />
-                solution{getFileExtension(state?.programmingLanguage)}
+                solution{getFileExtension(currentLanguage)}
               </button>
             </div>
             <div className="editor-actions">
@@ -620,9 +718,26 @@ export const Workspace: React.FC = () => {
                 )}
               </div>
 
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
+              <div className="translate-container" ref={languageDropdownRef}>
+                <Button variant="ghost" size="sm" onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}>
+                  <Settings className="h-4 w-4" />
+                </Button>
+                {showLanguageDropdown && (
+                  <div className="translate-dropdown">
+                    <div className="translate-dropdown__header">Change Language:</div>
+                    {SUPPORTED_LANGUAGES.map((lang) => (
+                      <button
+                        key={lang.value}
+                        className="translate-dropdown__item"
+                        onClick={() => handleLanguageSelect(lang.value)}
+                        style={{ fontWeight: currentLanguage === lang.value ? 'bold' : 'normal' }}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <Button size="sm" className="ml-2">
                 <Play className="h-4 w-4 mr-2" />
                 Run Code
@@ -646,12 +761,17 @@ export const Workspace: React.FC = () => {
                 ref={codeEditorRef}
                 value={code}
                 onChange={(val) => setCode(val || "")}
-                language={state?.programmingLanguage || 'javascript'}
+                language={currentLanguage}
                 currentUser={currentUser}
                 sessionId={sessionId}
                 onSystemTerminate={handleSystemTerminate}
                 onPartnerPresenceChange={handlePartnerPresenceChange}
                 onPeerTranslation={handlePeerTranslation}
+                onLanguageChangeRequest={handleLanguageChangeRequest}
+                onLanguageChangeApproved={handleLanguageChangeApproved}
+                onLanguageChangeResponse={handleLanguageChangeResponse}
+                onTranslationApprovalRequest={handleTranslationApprovalRequest}
+                onTranslationApprovalResponse={handleTranslationApprovalResponse}
               />
             ) : null}
           </div>
@@ -703,6 +823,78 @@ export const Workspace: React.FC = () => {
               <Button variant="solid" theme="user" onClick={() => void handleEndSessionInstantly()}>Return to Dashboard</Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Language Change Request Modal */}
+      {showLanguageRequestModal && peerLanguageRequestLang && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Language Change Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to change the current programming language to <strong>{SUPPORTED_LANGUAGES.find(l => l.value === peerLanguageRequestLang.toLowerCase())?.label || peerLanguageRequestLang}</strong>.</p>
+              <p style={{ marginTop: '0.5rem', opacity: 0.8 }}>Do you approve this change?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={handleLanguageRequestReject}
+              >
+                Reject
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={handleLanguageRequestApprove}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Translation Approval Request Modal */}
+      {peerTranslationRequestLang && (
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Translation Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to use AI to translate this code into <strong>{peerTranslationRequestLang.language}</strong>.</p>
+              <p style={{ marginTop: '0.5rem', opacity: 0.8 }}>Do you approve this change?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={() => {
+                  codeEditorRef.current?.broadcastTranslationApprovalResponse(false, peerTranslationRequestLang.timestamp);
+                  setPeerTranslationRequestLang(null);
+                }}
+              >
+                Reject
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={() => {
+                  codeEditorRef.current?.broadcastTranslationApprovalResponse(true, peerTranslationRequestLang.timestamp);
+                  setPeerTranslationRequestLang(null);
+                }}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Waiting Indicator */}
+      {(pendingTranslation || pendingLanguageChange) && (
+        <div className="waiting-indicator">
+          <Loader2 className="h-4 w-4 translate-spinner" />
+          <span>Waiting for peer approval...</span>
         </div>
       )}
     </div>

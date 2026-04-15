@@ -16,17 +16,27 @@ interface CodeEditorProps {
     onSystemTerminate?: (reason: string) => void;
     onPartnerPresenceChange?: (isPresent: boolean) => void;
     onPeerTranslation?: (language: string) => void;
+    onLanguageChangeRequest?: (language: string) => void;
+    onLanguageChangeApproved?: (language: string) => void;
+    onLanguageChangeResponse?: (isApproved: boolean) => void;
+    onTranslationApprovalRequest?: (language: string, timestamp: number) => void;
+    onTranslationApprovalResponse?: (isApproved: boolean, timestamp: number) => void;
 }
 
 export interface CodeEditorHandle {
     getCode: () => string;
     setCode: (code: string) => void;
     broadcastTranslation: (targetLanguage: string) => void;
+    broadcastLanguageRequest: (language: string) => void;
+    broadcastLanguageApproved: (language: string) => void;
+    broadcastLanguageResponse: (isApproved: boolean, timestamp: number) => void;
+    broadcastTranslationApprovalRequest: (language: string, timestamp: number) => void;
+    broadcastTranslationApprovalResponse: (isApproved: boolean, timestamp: number) => void;
 }
 
 const PEER_ENDED_MSG = 'This Session has been ended by a peer. Returning to Dashboard.';
 
-export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange, onPeerTranslation }, ref) => {
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange, onPeerTranslation, onLanguageChangeRequest, onLanguageChangeApproved, onLanguageChangeResponse, onTranslationApprovalRequest, onTranslationApprovalResponse }, ref) => {
     const { userId } = useAuth();
     const editorRef = useRef<any>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
@@ -36,9 +46,23 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
     const monacoRef = useRef<any>(null);
     const monacoLang = getMonacoLang(language);
 
-    // Stable callback ref for peer translation
     const onPeerTranslationRef = useRef(onPeerTranslation);
     onPeerTranslationRef.current = onPeerTranslation;
+    
+    const onLanguageChangeRequestRef = useRef(onLanguageChangeRequest);
+    onLanguageChangeRequestRef.current = onLanguageChangeRequest;
+
+    const onLanguageChangeApprovedRef = useRef(onLanguageChangeApproved);
+    onLanguageChangeApprovedRef.current = onLanguageChangeApproved;
+
+    const onLanguageChangeResponseRef = useRef(onLanguageChangeResponse);
+    onLanguageChangeResponseRef.current = onLanguageChangeResponse;
+
+    const onTranslationApprovalRequestRef = useRef(onTranslationApprovalRequest);
+    onTranslationApprovalRequestRef.current = onTranslationApprovalRequest;
+
+    const onTranslationApprovalResponseRef = useRef(onTranslationApprovalResponse);
+    onTranslationApprovalResponseRef.current = onTranslationApprovalResponse;
 
     useImperativeHandle(ref, () => ({
         getCode: () => {
@@ -69,6 +93,57 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
                 setTimeout(() => {
                     provider.awareness.setLocalStateField('translation', null);
                 }, 2000);
+            }
+        },
+        broadcastLanguageRequest: (targetLanguage: string) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('languageRequest', {
+                    language: targetLanguage,
+                    timestamp: Date.now(),
+                });
+                setTimeout(() => {
+                    provider.awareness.setLocalStateField('languageRequest', null);
+                }, 2000);
+            }
+        },
+        broadcastLanguageApproved: (targetLanguage: string) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('languageApproved', {
+                    language: targetLanguage,
+                    timestamp: Date.now(),
+                });
+                setTimeout(() => {
+                    provider.awareness.setLocalStateField('languageApproved', null);
+                }, 2000);
+            }
+        },
+        broadcastLanguageResponse: (isApproved: boolean, timestamp: number) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('languageResponse', {
+                    isApproved, timestamp
+                });
+                setTimeout(() => provider.awareness.setLocalStateField('languageResponse', null), 2000);
+            }
+        },
+        broadcastTranslationApprovalRequest: (language: string, timestamp: number) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('translationApprovalRequest', {
+                    language, timestamp
+                });
+                setTimeout(() => provider.awareness.setLocalStateField('translationApprovalRequest', null), 2000);
+            }
+        },
+        broadcastTranslationApprovalResponse: (isApproved: boolean, timestamp: number) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('translationApprovalResponse', {
+                    isApproved, timestamp
+                });
+                setTimeout(() => provider.awareness.setLocalStateField('translationApprovalResponse', null), 2000);
             }
         },
     }), []);
@@ -197,8 +272,13 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
             }, PARTNER_OFFLINE_DEBOUNCE_MS);
         };
 
-        // Track last seen translation timestamp to avoid duplicate notifications
+        // track last seen translation timestamp to avoid duplicate notifications
         const seenTranslations = new Set<number>();
+        const seenLanguageRequests = new Set<number>();
+        const seenLanguageApprovals = new Set<number>();
+        const seenLanguageResponses = new Set<number>();
+        const seenTranslationRequests = new Set<number>();
+        const seenTranslationResponses = new Set<number>();
 
         provider.awareness.on('change', () => {
             if (!onPartnerPresenceChange) return;
@@ -212,13 +292,43 @@ export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onCha
                 maybeReportPartnerOfflineAfterDebounce();
             }
 
-            // Check for peer translation notifications
+            // check for peer notifications locally
             states.forEach((state: any, clientID: number) => {
                 if (clientID === ydoc.clientID) return; // skip own state
                 if (state.translation && state.translation.language && state.translation.timestamp) {
                     if (!seenTranslations.has(state.translation.timestamp)) {
                         seenTranslations.add(state.translation.timestamp);
                         onPeerTranslationRef.current?.(state.translation.language);
+                    }
+                }
+                if (state.languageRequest && state.languageRequest.language && state.languageRequest.timestamp) {
+                    if (!seenLanguageRequests.has(state.languageRequest.timestamp)) {
+                        seenLanguageRequests.add(state.languageRequest.timestamp);
+                        onLanguageChangeRequestRef.current?.(state.languageRequest.language);
+                    }
+                }
+                if (state.languageApproved && state.languageApproved.language && state.languageApproved.timestamp) {
+                    if (!seenLanguageApprovals.has(state.languageApproved.timestamp)) {
+                        seenLanguageApprovals.add(state.languageApproved.timestamp);
+                        onLanguageChangeApprovedRef.current?.(state.languageApproved.language);
+                    }
+                }
+                if (state.languageResponse && state.languageResponse.timestamp) {
+                    if (!seenLanguageResponses.has(state.languageResponse.timestamp)) {
+                        seenLanguageResponses.add(state.languageResponse.timestamp);
+                        onLanguageChangeResponseRef.current?.(state.languageResponse.isApproved);
+                    }
+                }
+                if (state.translationApprovalRequest && state.translationApprovalRequest.language && state.translationApprovalRequest.timestamp) {
+                    if (!seenTranslationRequests.has(state.translationApprovalRequest.timestamp)) {
+                        seenTranslationRequests.add(state.translationApprovalRequest.timestamp);
+                        onTranslationApprovalRequestRef.current?.(state.translationApprovalRequest.language, state.translationApprovalRequest.timestamp);
+                    }
+                }
+                if (state.translationApprovalResponse && state.translationApprovalResponse.timestamp) {
+                    if (!seenTranslationResponses.has(state.translationApprovalResponse.timestamp)) {
+                        seenTranslationResponses.add(state.translationApprovalResponse.timestamp);
+                        onTranslationApprovalResponseRef.current?.(state.translationApprovalResponse.isApproved, state.translationApprovalResponse.timestamp);
                     }
                 }
             });

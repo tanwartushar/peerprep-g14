@@ -26,7 +26,7 @@ export const TranslationNotification: React.FC<TranslationNotificationProps> = (
       const timer = setTimeout(() => {
         setIsVisible(false);
         onDismiss();
-      }, 5000);
+      }, 15000);
       return () => clearTimeout(timer);
     }
   }, [language, onDismiss]);
