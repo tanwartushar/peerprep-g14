@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react';
 import * as Y from 'yjs';
 // @ts-ignore
@@ -15,11 +15,18 @@ interface CodeEditorProps {
     currentUser?: { name: string; color: string };
     onSystemTerminate?: (reason: string) => void;
     onPartnerPresenceChange?: (isPresent: boolean) => void;
+    onPeerTranslation?: (language: string) => void;
+}
+
+export interface CodeEditorHandle {
+    getCode: () => string;
+    setCode: (code: string) => void;
+    broadcastTranslation: (targetLanguage: string) => void;
 }
 
 const PEER_ENDED_MSG = 'This Session has been ended by a peer. Returning to Dashboard.';
 
-export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange }) => {
+export const CodeEditor = forwardRef<CodeEditorHandle, CodeEditorProps>(({ onChange, language = 'javascript', sessionId = 'default-session', currentUser, onSystemTerminate, onPartnerPresenceChange, onPeerTranslation }, ref) => {
     const { userId } = useAuth();
     const editorRef = useRef<any>(null);
     const providerRef = useRef<WebsocketProvider | null>(null);
@@ -28,6 +35,43 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
     const partnerOfflineTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const monacoRef = useRef<any>(null);
     const monacoLang = getMonacoLang(language);
+
+    // Stable callback ref for peer translation
+    const onPeerTranslationRef = useRef(onPeerTranslation);
+    onPeerTranslationRef.current = onPeerTranslation;
+
+    useImperativeHandle(ref, () => ({
+        getCode: () => {
+            const ydoc = ydocRef.current;
+            if (ydoc) {
+                return ydoc.getText('monaco').toString();
+            }
+            return editorRef.current?.getValue() || '';
+        },
+        setCode: (code: string) => {
+            const ydoc = ydocRef.current;
+            if (ydoc) {
+                const ytext = ydoc.getText('monaco');
+                ydoc.transact(() => {
+                    ytext.delete(0, ytext.length);
+                    ytext.insert(0, code);
+                });
+            }
+        },
+        broadcastTranslation: (targetLanguage: string) => {
+            const provider = providerRef.current;
+            if (provider) {
+                provider.awareness.setLocalStateField('translation', {
+                    language: targetLanguage,
+                    timestamp: Date.now(),
+                });
+                // clear the translation field after 2 seconds so it doesn't trigger again
+                setTimeout(() => {
+                    provider.awareness.setLocalStateField('translation', null);
+                }, 2000);
+            }
+        },
+    }), []);
 
     const handleBeforeMount: BeforeMount = (monaco) => {
         monacoRef.current = monaco;
@@ -153,6 +197,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
             }, PARTNER_OFFLINE_DEBOUNCE_MS);
         };
 
+        // Track last seen translation timestamp to avoid duplicate notifications
+        const seenTranslations = new Set<number>();
+
         provider.awareness.on('change', () => {
             if (!onPartnerPresenceChange) return;
             if (didEmitTermination) return;
@@ -164,6 +211,17 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
             } else if (hasPartnerJoined && states.size <= 1) {
                 maybeReportPartnerOfflineAfterDebounce();
             }
+
+            // Check for peer translation notifications
+            states.forEach((state: any, clientID: number) => {
+                if (clientID === ydoc.clientID) return; // skip own state
+                if (state.translation && state.translation.language && state.translation.timestamp) {
+                    if (!seenTranslations.has(state.translation.timestamp)) {
+                        seenTranslations.add(state.translation.timestamp);
+                        onPeerTranslationRef.current?.(state.translation.language);
+                    }
+                }
+            });
         });
 
         // one-time check after WebSocket sync: if user reconnects and peer is already gone
@@ -250,4 +308,6 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ onChange, language = 'ja
             />
         </div>
     );
-};
+});
+
+CodeEditor.displayName = 'CodeEditor';

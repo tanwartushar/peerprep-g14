@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Code2,
@@ -7,9 +7,14 @@ import {
   LogOut,
   MessageSquare,
   Play,
+  Languages,
+  Loader2,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "../components/Button";
-import { CodeEditor } from "../components/CodeEditor";
+import { CodeEditor, type CodeEditorHandle } from "../components/CodeEditor";
+import { TranslationModal } from "../components/TranslationModal";
+import { TranslationNotification } from "../components/TranslationNotification";
 import { useCurrentUserProfile } from "../hooks/useCurrentUserProfile";
 import "./Workspace.css";
 
@@ -26,6 +31,15 @@ interface LocationState {
   peerTimeAvailableMinutes?: number | null;
   matchedTimeAvailableMinutes?: number | null;
 }
+
+const SUPPORTED_LANGUAGES = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'python', label: 'Python' },
+  { value: 'java', label: 'Java' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'go', label: 'Go' },
+];
 
 function formatDifficultyLabel(d: string | undefined): string {
   if (!d) return "—";
@@ -88,6 +102,16 @@ export const Workspace: React.FC = () => {
   const [isTerminating, setIsTerminating] = useState(false);
   const [hasSessionEnded, setHasSessionEnded] = useState(false);
   const sessionEndedRef = React.useRef(false);
+
+  // Translation state
+  const codeEditorRef = useRef<CodeEditorHandle>(null);
+  const [showTranslateDropdown, setShowTranslateDropdown] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationResult, setTranslationResult] = useState<string>("");
+  const [translationTargetLang, setTranslationTargetLang] = useState<string>("");
+  const [showTranslationModal, setShowTranslationModal] = useState(false);
+  const [peerTranslationLang, setPeerTranslationLang] = useState<string | null>(null);
+  const translateDropdownRef = useRef<HTMLDivElement>(null);
 
   const endSessionOnce = React.useCallback(
     (reason?: string) => {
@@ -242,6 +266,19 @@ export const Workspace: React.FC = () => {
     return () => clearInterval(interval);
   }, [sessionId, isSessionLoading, endSessionOnce]);
 
+  // Close translate dropdown on outside click
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (translateDropdownRef.current && !translateDropdownRef.current.contains(e.target as Node)) {
+        setShowTranslateDropdown(false);
+      }
+    };
+    if (showTranslateDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showTranslateDropdown]);
+
   const handleEndSessionInstantly = async () => {
     if (isTerminating || sessionEndedRef.current) return;
     setIsTerminating(true);
@@ -279,6 +316,71 @@ export const Workspace: React.FC = () => {
     else setShowDisconnectModal(false);
   };
 
+  // Translation handlers
+  const handleTranslate = async (targetLanguage: string) => {
+    setShowTranslateDropdown(false);
+    if (!codeEditorRef.current || isTranslating) return;
+
+    const currentCode = codeEditorRef.current.getCode();
+    if (!currentCode || currentCode.trim().length === 0) {
+      alert("There is no code to translate. Write some code first.");
+      return;
+    }
+
+    setIsTranslating(true);
+    setTranslationTargetLang(targetLanguage);
+
+    try {
+      const res = await fetch('/api/ai/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code: currentCode,
+          sourceLanguage: state?.programmingLanguage || 'javascript',
+          targetLanguage,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Translation failed');
+      }
+
+      const data = await res.json();
+      setTranslationResult(data.translatedCode);
+      setShowTranslationModal(true);
+    } catch (err: any) {
+      alert(`Translation failed: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleTranslationReject = () => {
+    setShowTranslationModal(false);
+    setTranslationResult("");
+    setTranslationTargetLang("");
+  };
+
+  const handleTranslationApprove = () => {
+    if (codeEditorRef.current && translationResult) {
+      codeEditorRef.current.setCode(translationResult);
+      codeEditorRef.current.broadcastTranslation(translationTargetLang);
+    }
+    setShowTranslationModal(false);
+    setTranslationResult("");
+    setTranslationTargetLang("");
+  };
+
+  const handlePeerTranslation = useCallback((language: string) => {
+    setPeerTranslationLang(language);
+  }, []);
+
+  const handleDismissNotification = useCallback(() => {
+    setPeerTranslationLang(null);
+  }, []);
+
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
   const partnerDifficulty = formatDifficultyLabel(
     state?.peerRequestedDifficulty ?? undefined,
@@ -291,6 +393,12 @@ export const Workspace: React.FC = () => {
         : null;
 
   const showMatchBanner = Boolean(state?.peerUserId);
+
+  // Filter out the current language from the translate dropdown
+  const currentLangKey = (state?.programmingLanguage || 'javascript').toLowerCase();
+  const translateLanguages = SUPPORTED_LANGUAGES.filter(
+    l => l.value !== currentLangKey && l.value !== (currentLangKey === 'c++' ? 'cpp' : currentLangKey)
+  );
 
   return (
     <div className="workspace-layout">
@@ -478,6 +586,40 @@ export const Workspace: React.FC = () => {
               </button>
             </div>
             <div className="editor-actions">
+              {/* Translate Code Button */}
+              <div className="translate-container" ref={translateDropdownRef}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTranslateDropdown(!showTranslateDropdown)}
+                  disabled={isTranslating}
+                  className="translate-btn"
+                >
+                  {isTranslating ? (
+                    <Loader2 className="h-4 w-4 mr-2 translate-spinner" />
+                  ) : (
+                    <Languages className="h-4 w-4 mr-2" />
+                  )}
+                  {isTranslating ? "Translating..." : "Translate Code"}
+                  {!isTranslating && <ChevronDown className="h-3 w-3 ml-1" />}
+                </Button>
+
+                {showTranslateDropdown && (
+                  <div className="translate-dropdown">
+                    <div className="translate-dropdown__header">Translate to:</div>
+                    {translateLanguages.map((lang) => (
+                      <button
+                        key={lang.value}
+                        className="translate-dropdown__item"
+                        onClick={() => handleTranslate(lang.value)}
+                      >
+                        {lang.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
@@ -501,6 +643,7 @@ export const Workspace: React.FC = () => {
               </div>
             ) : !hasSessionEnded ? (
               <CodeEditor
+                ref={codeEditorRef}
                 value={code}
                 onChange={(val) => setCode(val || "")}
                 language={state?.programmingLanguage || 'javascript'}
@@ -508,6 +651,7 @@ export const Workspace: React.FC = () => {
                 sessionId={sessionId}
                 onSystemTerminate={handleSystemTerminate}
                 onPartnerPresenceChange={handlePartnerPresenceChange}
+                onPeerTranslation={handlePeerTranslation}
               />
             ) : null}
           </div>
@@ -529,6 +673,21 @@ export const Workspace: React.FC = () => {
       <button className="chat-fab">
         <MessageSquare className="h-6 w-6" />
       </button>
+
+      {/* Translation Modal */}
+      <TranslationModal
+        translatedCode={translationResult}
+        targetLanguage={translationTargetLang}
+        onReject={handleTranslationReject}
+        onApprove={handleTranslationApprove}
+        isVisible={showTranslationModal}
+      />
+
+      {/* Peer Translation Notification */}
+      <TranslationNotification
+        language={peerTranslationLang}
+        onDismiss={handleDismissNotification}
+      />
 
       {/* Disconnection Modal */}
       {showDisconnectModal && !partnerOnline && !hasSessionEnded && (
