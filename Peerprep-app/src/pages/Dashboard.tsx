@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
+import {
+  BookOpen,
+  Target,
+  Play,
+  CircleGauge,
+  Code2,
+  Clock,
+  Layers,
+} from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
@@ -322,21 +330,40 @@ export const Dashboard: React.FC = () => {
                 leftIcon={<Clock className="h-5 w-5" />}
               />
 
-              <label className="dashboard-allow-lower mt-8">
-                <input
-                  type="checkbox"
-                  checked={allowLowerDifficultyMatch}
-                  onChange={(e) =>
-                    setAllowLowerDifficultyMatch(e.target.checked)
-                  }
-                />
-                <span>Allow lower difficulty match</span>
-              </label>
-              <p className="dashboard-allow-lower-hint text-secondary text-sm mt-2">
-                When on, you may be paired with someone who chose an easier
-                level (same topic and language). Same level is always tried
-                first.
-              </p>
+              <div className="dashboard-allow-lower-wrap mt-8">
+                <span className="select-label select-label--user">
+                  Matching flexibility
+                </span>
+                <label
+                  className={`dashboard-allow-lower-card ${allowLowerDifficultyMatch ? "is-on" : ""}`}
+                >
+                  <input
+                    id="allow-lower-difficulty"
+                    type="checkbox"
+                    className="dashboard-allow-lower-input"
+                    checked={allowLowerDifficultyMatch}
+                    onChange={(e) =>
+                      setAllowLowerDifficultyMatch(e.target.checked)
+                    }
+                  />
+                  <span className="dashboard-allow-lower-card-inner">
+                    <span className="dashboard-allow-lower-icon" aria-hidden>
+                      <Layers className="h-5 w-5" />
+                    </span>
+                    <span className="dashboard-allow-lower-copy">
+                      <span className="dashboard-allow-lower-title">
+                        Allow lower-difficulty partners
+                      </span>
+                      <span className="dashboard-allow-lower-tagline">
+                        Same topic & language · we still match your level first
+                      </span>
+                    </span>
+                    <span className="dashboard-allow-lower-switch" aria-hidden>
+                      <span className="dashboard-allow-lower-knob" />
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             {submitError ? (
