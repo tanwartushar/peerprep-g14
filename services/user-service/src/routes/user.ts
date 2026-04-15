@@ -22,9 +22,10 @@ router.get("/user/hello", (req: Request, res: Response) => {
 // 1. Initial trigger: Redirects user to GitHub
 router.get("/user/auth/github", (req: Request, res: Response) => {
   const rootUrl = "https://github.com/login/oauth/authorize";
+  const baseUrl = process.env.BASE_URL || "";
   const options = {
     client_id: process.env.GITHUB_CLIENT_ID!,
-    redirect_uri: "http://localhost/user/user/login",
+    redirect_uri: `${baseUrl}/user/user/login`, 
     scope: "user:email",
   };
 
@@ -125,20 +126,22 @@ router.get("/user/user/login", async (req: Request, res: Response) => {
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     if (isNewUser) {
-      res.redirect(`http://localhost/profile-setup?userId=${user.id}`);
+      res.redirect(`/#/profile-setup?userId=${user.id}`);
     } else {
-      res.redirect(`http://localhost/dashboard`);
+      res.redirect(`/#/dashboard`);
     }
   } catch (err) {
     console.error("GitHub OAuth Login Error:", err);

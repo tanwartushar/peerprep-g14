@@ -17,16 +17,22 @@ services:
     depends_on:
       - frontend
       - user-service
+      - auth-service
       - question-service
       - matching-service
+      - code-execution-service
+      - ai-service
 
   auth-service:
     ports:
       - "3000:3000"
     build:
       context: ./services/auth-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
+    depends_on:
+      - user-service
+      - matching-service
     environment:
       - CHOKIDAR_USEPOLLING=true
     volumes:
@@ -64,7 +70,7 @@ services:
       - "3001:3001"
     build:
       context: ./services/user-service # Path to your user service folder
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -94,7 +100,7 @@ services:
       - "3003:3003"
     build:
       context: ./services/matching-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     env_file:
       - ./services/matching-service/.env
@@ -104,6 +110,18 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3003/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
     volumes:
       - ./services/matching-service/src:/usr/src/app/src
     develop:
@@ -156,7 +174,7 @@ services:
       - ./services/collaboration-service/.env
     build:
       context: ./services/collaboration-service
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     tty: true
     environment:
       - CHOKIDAR_USEPOLLING=true
@@ -170,6 +188,44 @@ services:
           target: /usr/src/app/src
         - action: rebuild
           path: ./services/collaboration-service/package.json
+
+  # --- CODE EXECUTION SERVICE ---
+  code-execution-service:
+    ports:
+      - "3006:3006"
+    build:
+      context: ./services/code-execution-service
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./services/code-execution-service/.env
+    environment:
+      - QUESTION_SERVICE_URL=http://question-service:3002
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - question-service
+    restart: on-failure
+  # --- AI SERVICE ---
+  ai-service:
+    ports:
+      - "3005:3005"
+    build:
+      context: ./services/ai-service
+      dockerfile: Dockerfile.dev
+    tty: true
+    env_file:
+      - ./services/ai-service/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./services/ai-service/src:/usr/src/app/src
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/ai-service/src
+          target: /usr/src/app/src
+        - action: rebuild
+          path: ./services/ai-service/package.json
 
 volumes:
   prometheus_data: {}

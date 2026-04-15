@@ -62,12 +62,14 @@ router.post("/user/admin/login", async (req: Request, res: Response) => {
 
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
+      secure: false, // MUST be false for plain http
       sameSite: "lax",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -129,7 +131,7 @@ router.patch("/admin/users/:id", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { name, bio, experienceLevel, learningPurpose } = req.body;
 
   try {
@@ -251,7 +253,7 @@ router.patch("/admin/admins/:id", async (req: Request, res: Response) => {
     return res.status(403).json({ message: "Forbidden" });
   }
 
-  const { id } = req.params;
+  const { id } = req.params as { id: string };
   const { name } = req.body;
 
   try {

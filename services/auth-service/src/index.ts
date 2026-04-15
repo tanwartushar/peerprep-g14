@@ -53,7 +53,7 @@ const verifyGateway = async (req: any, res: any, next: any) => {
       // 3. SET THE COOKIE HERE (On the actual response going to user)
       res.cookie('accessToken', newAccessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // MUST be false for plain http
         sameSite: 'lax',
         maxAge: 15 * 60 * 1000
       });
@@ -89,15 +89,21 @@ app.post('/api/auth/logout', async (req: any, res: any) => {
 
   res.clearCookie('accessToken', {
     httpOnly: true,
+    secure: false, // MUST be false for plain http
     sameSite: 'lax',
   });
 
   res.clearCookie('refreshToken', {
     httpOnly: true,
+    secure: false, // MUST be false for plain http
     sameSite: 'lax',
   });
 
   return res.status(200).json({ message: "Logged out successfully" });
+});
+
+app.get('/health', async (req: any, res: any) => {
+  return res.status(200).send('OK');
 });
 
 // New endpoint for frontend to verify session validity
@@ -122,6 +128,34 @@ app.use('/api/questions', verifyGateway, createProxyMiddleware({
   pathRewrite: { '^/api/questions': '/' },
 }));
 
+// Route /api/matching → matching-service (same auth + x-user-id injection as other /api routes)
+// Express strips the mount path, so the proxy sees `/requests` not `/api/matching/requests`.
+// Prepend `/matching` so upstream receives `/matching/requests` (not `/requests`, which 404s).
+app.use(
+  '/api/matching',
+  verifyGateway,
+  createProxyMiddleware({
+    target: 'http://matching-service:3003',
+    changeOrigin: true,
+    /** SSE streams can stay open for the whole match wait. */
+    timeout: 3_600_000,
+    proxyTimeout: 3_600_000,
+    pathRewrite: (path: string) => {
+      const [pathname, search] = path.split('?');
+      const nextPath = '/matching' + (pathname || '');
+      return search ? `${nextPath}?${search}` : nextPath;
+    },
+  }),
+);
+
+// Route /api/execute to code-execution-service
+app.use('/api/execute', verifyGateway, createProxyMiddleware({
+  target: 'http://code-execution-service:3006',
+  changeOrigin: true,
+  pathRewrite: { '^/': '/execute' },
+  timeout: 300000,        // 5 min — covers first-time image pulls
+  proxyTimeout: 300000,
+}));
 
 const collabProxy = createProxyMiddleware({
   target: 'http://collaboration-service:3004',
@@ -143,3 +177,10 @@ server.on('upgrade', (req: any, socket: any, head: any) => {
     socket.destroy();
   }
 });
+
+// Route /api/ai to ai-service
+app.use('/api/ai', verifyGateway, createProxyMiddleware({
+  target: 'http://ai-service:3005',
+  changeOrigin: true,
+  pathRewrite: { '^/api/ai': '/' },
+}));

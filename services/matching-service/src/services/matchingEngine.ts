@@ -38,7 +38,12 @@ export type MatchPairResult = {
 };
 
 function poolKey(r: MatchRequestRow): string {
-  return `${r.topic}\0${r.programmingLanguage}`;
+  return poolKeyString(r.topic, r.programmingLanguage);
+}
+
+/** Stable pool id — same as `poolKey` / DB grouping for `(topic, programmingLanguage)`. */
+export function poolKeyString(topic: string, programmingLanguage: string): string {
+  return `${topic}\0${programmingLanguage}`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import {
-  BrowserRouter as Router,
+  HashRouter as Router,
   Routes,
   Route,
   Navigate,
@@ -90,7 +90,6 @@ const App: React.FC = () => {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router>
-          <MatchingDevUserInit />
           <div className="app-wrapper">
             <main className="main-content">
               <Routes>

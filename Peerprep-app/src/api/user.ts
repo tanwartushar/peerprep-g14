@@ -18,7 +18,7 @@ export type UpdateCurrentUserProfilePayload = {
 };
 
 export async function getCurrentUserProfile(): Promise<CurrentUserProfile> {
-  const response = await fetch(`http://localhost/api/user/profile/me`, {
+  const response = await fetch(`/api/user/profile/me`, {
     method: "GET",
     credentials: "include",
   });

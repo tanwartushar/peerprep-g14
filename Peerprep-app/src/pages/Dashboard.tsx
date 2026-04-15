@@ -1,14 +1,24 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { BookOpen, Target, Play, CircleGauge, Code2, Clock } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  BookOpen,
+  Target,
+  Play,
+  CircleGauge,
+  Code2,
+  Clock,
+  Layers,
+} from "lucide-react";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import "./Dashboard.css";
 import Card from "../components/Card";
 import { useAuth } from "../context/AuthContext";
-import { createMatchRequest } from "../api/matching";
-import { getEffectiveMatchingUserId } from "../dev/matchingDevUser";
-import { setActiveMatchRequestId } from "../matching/matchingSession";
+import { createMatchRequest, getActiveMatchRequest } from "../api/matching";
+import {
+  getActiveMatchRequestId,
+  setActiveMatchRequestId,
+} from "../matching/matchingSession";
 import {
   loadMatchFormDraft,
   saveMatchFormDraft,
@@ -16,6 +26,8 @@ import {
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const stateFromNav = location.state as any;
   const { userId, isLoading } = useAuth();
   const [difficulty, setDifficulty] = useState(
     () => loadMatchFormDraft()?.difficulty ?? "",
@@ -33,61 +45,104 @@ export const Dashboard: React.FC = () => {
   );
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** False until we finish “resume” checks so we don’t double-submit before redirect to /matching. */
+  const [resumeCheckDone, setResumeCheckDone] = useState(false);
   const dashboardTheme = "user";
 
+  const [topToast, setTopToast] = useState<string | null>(stateFromNav?.sessionNotification || null);
+
   useEffect(() => {
-    if (isLoading || !userId) return;
+      if (topToast) {
+         const t = setTimeout(() => setTopToast(null), 10000);
+         return () => clearTimeout(t);
+      }
+  }, [topToast]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!userId) {
+      setResumeCheckDone(true);
+      return;
+    }
     let mounted = true;
 
     const checkActiveSession = async () => {
+      if (!userId) {
+        if (mounted) setResumeCheckDone(true);
+        return;
+      }
+
       try {
-        const res = await fetch('/api/collaboration/sessions/active', {
-          credentials: 'include'
+        const res = await fetch("/api/collaboration/sessions/active", {
+          credentials: "include",
         });
         if (res.ok && res.status !== 204 && mounted) {
           const session = await res.json();
-          // termination validation: alert offline returning users
           if (session.status === "terminated") {
             const shownKey = `notified_termination_${session.id}`;
             if (!sessionStorage.getItem(shownKey)) {
-              // Rely on terminatedBy rather than terminateReason since the DB
-              // always stores 'Deliberate' due to Docker build cache on local services.
-              // If the terminator is someone else, this user was offline.
-              if (session.terminatedBy !== userId && session.terminatedBy !== 'anonymous') {
-                alert("Your previous session has ended. You can find a new match from the Dashboard.");
+              if (
+                session.terminatedBy !== userId &&
+                session.terminatedBy !== "anonymous"
+              ) {
+                setTopToast(
+                  "Your previous session has ended. You can find a new match from the Dashboard.",
+                );
               }
               sessionStorage.setItem(shownKey, "true");
             }
+            // Still check for a pending match below (user may have left matching UI).
+          } else if (session.status === "active") {
+            const part1 = session.id.slice(0, 36);
+            const part2 = session.id.slice(37);
+            const isUser1 = session.user1Id === userId;
+            navigate("/workspace", {
+              state: {
+                requestId: part1,
+                peerMatchRequestId: part2,
+                programmingLanguage: session.language,
+                peerUserId: isUser1 ? session.user2Id : session.user1Id,
+                difficulty: "",
+                topic: "",
+              },
+            });
+            if (mounted) setResumeCheckDone(true);
             return;
           }
-          // only resume an actually active session (terminated rows must not trap users in a WS loop)
-          if (session.status !== "active") {
-            return;
-          }
-          // extract the original pair of UUIDs from the sorted ID string (format: UUID_36 - UUID_36)
-          const part1 = session.id.slice(0, 36);
-          const part2 = session.id.slice(37);
-          const effId = getEffectiveMatchingUserId(userId);
-          const isUser1 = session.user1Id === (effId || userId);
+          // Non-active session row (e.g. stale): fall through — check matching queue next.
+        }
+      } catch {
+        /* collaboration unavailable — still try matching active */
+      }
 
-          navigate('/workspace', {
+      try {
+        const matchRes = await getActiveMatchRequest();
+        if (!mounted) return;
+        if (matchRes.ok && matchRes.data.status === "PENDING") {
+          setActiveMatchRequestId(matchRes.data.id);
+          navigate("/matching", {
             state: {
-              requestId: part1,
-              peerMatchRequestId: part2,
-              programmingLanguage: session.language,
-              peerUserId: isUser1 ? session.user2Id : session.user1Id,
-              difficulty: '',
-              topic: ''
-            }
+              requestId: matchRes.data.id,
+              topic: matchRes.data.topic,
+              difficulty: matchRes.data.difficulty,
+              programmingLanguage: matchRes.data.programmingLanguage,
+              allowLowerDifficultyMatch: matchRes.data.allowLowerDifficultyMatch,
+              timeAvailableMinutes:
+                matchRes.data.timeAvailableMinutes ?? undefined,
+            },
           });
         }
-      } catch (e) {
-        // dashboard renders normally
+      } catch {
+        /* ignore */
+      } finally {
+        if (mounted) setResumeCheckDone(true);
       }
     };
 
     void checkActiveSession();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [userId, isLoading, navigate]);
 
   useEffect(() => {
@@ -109,14 +164,13 @@ export const Dashboard: React.FC = () => {
   const handleStartMatching = async () => {
     setSubmitError(null);
     if (!difficulty || !topic || !programmingLanguage) return;
-    const effectiveId = getEffectiveMatchingUserId(userId);
-    if (!effectiveId) {
+    if (!userId) {
       setSubmitError("Sign in to find a match.");
       return;
     }
     setIsSubmitting(true);
     try {
-      const result = await createMatchRequest(effectiveId, {
+      const result = await createMatchRequest({
         topic,
         difficulty,
         programmingLanguage,
@@ -141,8 +195,24 @@ export const Dashboard: React.FC = () => {
         return;
       }
       if (result.status === 409) {
+        const existing = await getActiveMatchRequest();
+        if (existing.ok && existing.data.status === "PENDING") {
+          setActiveMatchRequestId(existing.data.id);
+          navigate("/matching", {
+            state: {
+              requestId: existing.data.id,
+              topic: existing.data.topic,
+              difficulty: existing.data.difficulty,
+              programmingLanguage: existing.data.programmingLanguage,
+              allowLowerDifficultyMatch: existing.data.allowLowerDifficultyMatch,
+              timeAvailableMinutes:
+                existing.data.timeAvailableMinutes ?? undefined,
+            },
+          });
+          return;
+        }
         setSubmitError(
-          "You already have an active match request. Cancel it from the matching screen or wait.",
+          "You already have an active match request. Open the matching screen or wait.",
         );
         return;
       }
@@ -190,8 +260,41 @@ export const Dashboard: React.FC = () => {
     { value: "60", label: "60 minutes" },
   ];
 
+  if (!resumeCheckDone) {
+    /** Only then is “resume” copy honest (e.g. first login has no stored match id). */
+    const mayResumeMatch =
+      typeof window !== "undefined" && Boolean(getActiveMatchRequestId());
+    return (
+      <div className="dashboard-page animate-fade-in">
+        <div className="dashboard-layout">
+          <div className="dashboard-main-container">
+            <Card
+              theme={dashboardTheme}
+              logo={<Target className="h-5 w-5" />}
+              title="Configure Session"
+              headerAlign="left"
+              showDivider
+              className="dashboard-content"
+            >
+              <p className="text-secondary text-sm" role="status">
+                {mayResumeMatch
+                  ? "Checking for an active session or match…"
+                  : "Loading dashboard…"}
+              </p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="animate-fade-in">
+    <div className="dashboard-page animate-fade-in">
+      {topToast && (
+        <div className="top-toast">
+          <span>{topToast}</span>
+        </div>
+      )}
       <div className="dashboard-layout">
         <div className="dashboard-main-container">
           <Card
@@ -243,21 +346,40 @@ export const Dashboard: React.FC = () => {
                 leftIcon={<Clock className="h-5 w-5" />}
               />
 
-              <label className="dashboard-allow-lower mt-8">
-                <input
-                  type="checkbox"
-                  checked={allowLowerDifficultyMatch}
-                  onChange={(e) =>
-                    setAllowLowerDifficultyMatch(e.target.checked)
-                  }
-                />
-                <span>Allow lower difficulty match</span>
-              </label>
-              <p className="dashboard-allow-lower-hint text-secondary text-sm mt-2">
-                When on, you may be paired with someone who chose an easier
-                level (same topic and language). Same level is always tried
-                first.
-              </p>
+              <div className="dashboard-allow-lower-wrap mt-8">
+                <span className="select-label select-label--user">
+                  Matching flexibility
+                </span>
+                <label
+                  className={`dashboard-allow-lower-card ${allowLowerDifficultyMatch ? "is-on" : ""}`}
+                >
+                  <input
+                    id="allow-lower-difficulty"
+                    type="checkbox"
+                    className="dashboard-allow-lower-input"
+                    checked={allowLowerDifficultyMatch}
+                    onChange={(e) =>
+                      setAllowLowerDifficultyMatch(e.target.checked)
+                    }
+                  />
+                  <span className="dashboard-allow-lower-card-inner">
+                    <span className="dashboard-allow-lower-icon" aria-hidden>
+                      <Layers className="h-5 w-5" />
+                    </span>
+                    <span className="dashboard-allow-lower-copy">
+                      <span className="dashboard-allow-lower-title">
+                        Allow lower-difficulty partners
+                      </span>
+                      <span className="dashboard-allow-lower-tagline">
+                        Same topic & language · we still match your level first
+                      </span>
+                    </span>
+                    <span className="dashboard-allow-lower-switch" aria-hidden>
+                      <span className="dashboard-allow-lower-knob" />
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             {submitError ? (
