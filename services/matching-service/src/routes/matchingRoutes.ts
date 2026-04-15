@@ -12,6 +12,10 @@ import {
   reconnectMatchRequestForUser,
 } from "../services/matchRequestService.js";
 import { requireUserId } from "../middleware/requireUserId.js";
+import {
+  matchingCreateLimiter,
+  matchingGeneralLimiter,
+} from "../middleware/rateLimits.js";
 import { sendMatchingServerError } from "../http/sendMatchingServerError.js";
 import {
   subscribeMatchRequestSse,
@@ -23,6 +27,8 @@ const router = Router();
 router.post(
   "/requests",
   requireUserId,
+  matchingGeneralLimiter,
+  matchingCreateLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     try {
@@ -49,6 +55,7 @@ router.post(
 router.get(
   "/requests/active",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     try {
@@ -67,6 +74,7 @@ router.get(
 router.get(
   "/requests/:id/events",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     const id = req.params["id"];
@@ -127,6 +135,7 @@ router.get(
 router.get(
   "/requests/:id",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     const id = req.params["id"];
@@ -150,6 +159,7 @@ router.get(
 router.delete(
   "/requests/:id",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     const id = req.params["id"];
@@ -193,6 +203,7 @@ router.delete(
 router.post(
   "/requests/:id/disconnect",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     const id = req.params["id"];
@@ -222,6 +233,7 @@ router.post(
 router.post(
   "/requests/:id/reconnect",
   requireUserId,
+  matchingGeneralLimiter,
   async (req: Request, res: Response) => {
     const userId = req.userId!;
     const id = req.params["id"];
