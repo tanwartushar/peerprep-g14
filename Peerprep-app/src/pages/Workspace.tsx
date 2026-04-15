@@ -125,9 +125,9 @@ export const Workspace: React.FC = () => {
   const [showLanguageRequestModal, setShowLanguageRequestModal] = useState(false);
 
   // Translation state
-  const [pendingTranslation, setPendingTranslation] = useState<{code: string, language: string, timestamp: number} | null>(null);
-  const [pendingLanguageChange, setPendingLanguageChange] = useState<{language: string, timestamp: number} | null>(null);
-  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{language: string, timestamp: number} | null>(null);
+  const [pendingTranslation, setPendingTranslation] = useState<{ code: string, language: string, timestamp: number } | null>(null);
+  const [pendingLanguageChange, setPendingLanguageChange] = useState<{ language: string, timestamp: number } | null>(null);
+  const [peerTranslationRequestLang, setPeerTranslationRequestLang] = useState<{ language: string, timestamp: number } | null>(null);
 
   const codeEditorRef = useRef<CodeEditorHandle>(null);
   const [showTranslateDropdown, setShowTranslateDropdown] = useState(false);
@@ -140,11 +140,11 @@ export const Workspace: React.FC = () => {
   const [sideToasts, setSideToasts] = useState<Array<{ id: number, message: React.ReactNode, icon: string, border: string }>>([]);
 
   const addSideToast = useCallback((message: React.ReactNode, icon: string = 'ℹ️', border: string = 'var(--user-400)') => {
-      const id = Date.now() + Math.random();
-      setSideToasts(prev => [...prev, { id, message, icon, border }]);
-      setTimeout(() => {
-          setSideToasts(prev => prev.filter(t => t.id !== id));
-      }, 12000);
+    const id = Date.now() + Math.random();
+    setSideToasts(prev => [...prev, { id, message, icon, border }]);
+    setTimeout(() => {
+      setSideToasts(prev => prev.filter(t => t.id !== id));
+    }, 12000);
   }, []);
 
   const endSessionOnce = React.useCallback(
@@ -508,7 +508,11 @@ export const Workspace: React.FC = () => {
     setShowTranslationModal(false);
   };
 
+  const lastTranslationToastRef = useRef<number>(0);
   const handlePeerTranslation = useCallback((language: string) => {
+    const now = Date.now();
+    if (now - lastTranslationToastRef.current < 2000) return; // Debounce duplicate toasts
+    lastTranslationToastRef.current = now;
     addSideToast(`Code translated to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language} by your peer`, '✨', 'var(--green, #48bb78)');
   }, [addSideToast]);
 
@@ -540,58 +544,58 @@ export const Workspace: React.FC = () => {
     const timestamp = Date.now();
     setPendingLanguageChange({ language: lang, timestamp });
     if (codeEditorRef.current) {
-        codeEditorRef.current.broadcastLanguageRequest(lang);
+      codeEditorRef.current.broadcastLanguageRequest(lang);
     }
   };
 
   const handleLanguageChangeRequest = useCallback((language: string) => {
-      setPeerLanguageRequestLang(language);
-      setShowLanguageRequestModal(true);
+    setPeerLanguageRequestLang(language);
+    setShowLanguageRequestModal(true);
   }, []);
 
   const handleLanguageChangeApproved = useCallback((language: string) => {
-      setPendingLanguageChange(null);
-      setCurrentLanguage(language);
-      addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
+    setPendingLanguageChange(null);
+    setCurrentLanguage(language);
+    addSideToast(`Code editor language changed to ${SUPPORTED_LANGUAGES.find(l => l.value === language.toLowerCase())?.label || language}`, '✨', 'var(--green, #48bb78)');
   }, [addSideToast]);
 
   const handleLanguageChangeResponse = useCallback((isApproved: boolean) => {
-      setPendingLanguageChange(null);
-      if (!isApproved) {
-          addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
-      }
+    setPendingLanguageChange(null);
+    if (!isApproved) {
+      addSideToast('Your request was denied by your peer.', '🚫', '#e53e3e');
+    }
   }, [addSideToast]);
 
   const handleLanguageRequestReject = () => {
     if (codeEditorRef.current) {
-        codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
+      codeEditorRef.current.broadcastLanguageResponse(false, Date.now());
     }
     setPeerLanguageRequestLang(null);
     setShowLanguageRequestModal(false);
   };
 
   const handleLanguageRequestApprove = async () => {
-      const targetLang = peerLanguageRequestLang;
-      setPeerLanguageRequestLang(null);
-      setShowLanguageRequestModal(false);
-      if (!targetLang) return;
-      
-      setCurrentLanguage(targetLang);
+    const targetLang = peerLanguageRequestLang;
+    setPeerLanguageRequestLang(null);
+    setShowLanguageRequestModal(false);
+    if (!targetLang) return;
 
-      if (codeEditorRef.current) {
-         codeEditorRef.current.broadcastLanguageApproved(targetLang);
-      }
+    setCurrentLanguage(targetLang);
 
-      try {
-        await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
-           method: 'PATCH',
-           headers: { 'Content-Type': 'application/json' },
-           credentials: 'include',
-           body: JSON.stringify({ language: targetLang })
-        });
-      } catch (err) {
-        console.error('Failed to save language change', err);
-      }
+    if (codeEditorRef.current) {
+      codeEditorRef.current.broadcastLanguageApproved(targetLang);
+    }
+
+    try {
+      await fetch(`/api/collaboration/sessions/${sessionId}/language`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ language: targetLang })
+      });
+    } catch (err) {
+      console.error('Failed to save language change', err);
+    }
   };
 
   const yourDifficulty = formatDifficultyLabel(state?.difficulty);
@@ -799,9 +803,6 @@ export const Workspace: React.FC = () => {
               </button>
             </div>
             <div className="editor-actions">
-              <Button variant="ghost" size="sm">
-                <Settings className="h-4 w-4" />
-              </Button>
               <Button
                 size="sm"
                 className="ml-2"
@@ -985,15 +986,27 @@ export const Workspace: React.FC = () => {
 
       {/* Code Execution Approval Modal */}
       {showApprovalModal && !hasSessionEnded && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary)', padding: '2rem', borderRadius: '12px', border: '1px solid var(--border-color)', maxWidth: '500px', width: '90%', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem', color: '#f9f6f6ff' }}>Run Code Request</h2>
-            <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
-              Your peer wants to run the code. Do you approve?
-            </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <Button variant="ghost" theme="user" onClick={handleDeclineExecution}>Decline</Button>
-              <Button variant="solid" theme="user" onClick={handleApproveExecution}>Approve</Button>
+        <div className="translation-modal-overlay">
+          <div className="translation-modal" style={{ maxWidth: '450px' }}>
+            <div className="translation-modal__header">
+              <h2 className="translation-modal__title">Run Code Request</h2>
+            </div>
+            <div className="translation-modal__body" style={{ color: 'var(--user-200)', fontSize: '0.95rem' }}>
+              <p>Your peer wants to run the code. Do you approve?</p>
+            </div>
+            <div className="translation-modal__actions">
+              <button
+                className="translation-modal__btn translation-modal__btn--reject"
+                onClick={handleDeclineExecution}
+              >
+                Decline
+              </button>
+              <button
+                className="translation-modal__btn translation-modal__btn--approve"
+                onClick={handleApproveExecution}
+              >
+                Approve
+              </button>
             </div>
           </div>
         </div>
