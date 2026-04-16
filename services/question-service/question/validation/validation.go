@@ -23,11 +23,15 @@ type TopicStore struct {
 func NewTopicStore() *TopicStore {
     return &TopicStore{
         topics: map[string]struct{}{
-            "binary_search":        {},
-			"depth_first_search":   {},
-			"breadth_first_search": {},
-			"singly_linked_list":   {},
-			"doubly_linked_list":   {},
+            "arrays":           {},
+            "two-pointers":     {},
+            "sliding-window":   {},
+            "stack":            {},
+            "binary-search":    {},
+            "linked-list":      {},
+            "trees":            {},
+            "graphs":           {},
+            "dp":               {},
         },
     }
 }

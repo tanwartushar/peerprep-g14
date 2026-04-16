@@ -22,6 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import QuestionBrowser from "../components/QuestionBrowser";
 import QuestionImageManager from "../components/QuestionImageManager";
 import { uploadQuestionImage, deleteQuestionImage } from "../firebaseClient";
+import { MATCH_TOPIC_OPTIONS } from "../constants/matchTopics";
 
 // --- Types & Constants ---
 interface Question {
@@ -35,14 +36,6 @@ interface Question {
   imageUrls: string[];
   matched: number;
 }
-
-const availabelTopics = [
-  { value: "binary_search", label: "Binary Search" },
-  { value: "depth_first_search", label: "Depth First Search" },
-  { value: "breadth_first_search", label: "Breadth First Search" },
-  { value: "singly_linked_list", label: "Singly Linked List" },
-  { value: "doubly_linked_list", label: "Doubly Linked List" },
-];
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -218,7 +211,7 @@ export const AdminDashboard: React.FC = () => {
 
   // --- Format helper for table display ---
   const getTopicLabel = (value: string) => {
-    const topic = availabelTopics.find((t) => t.value === value);
+    const topic = MATCH_TOPIC_OPTIONS.find((t) => t.value === value);
     return topic ? topic.label : value;
   };
 
@@ -364,7 +357,7 @@ export const AdminDashboard: React.FC = () => {
             theme="admin"
             label="Topics"
             placeholder="Select Topics"
-            options={availabelTopics}
+            options={MATCH_TOPIC_OPTIONS}
             value={formData.topics}
             onChange={(topics) => setFormData((prev) => ({ ...prev, topics }))}
           />

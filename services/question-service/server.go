@@ -49,8 +49,8 @@ func main() {
     })
 
 	//curl.exe -X GET http://localhost:3002/?difficulty=easy
-	//curl.exe -X GET "http://localhost:3002/?difficulty=medium&topic=depth_first_search"
-	//curl.exe -X GET "http://localhost:3002/?difficulty=hard&topic=depth_first_search"
+	//curl.exe -X GET "http://localhost:3002/?difficulty=medium&topic=arrays"
+	//curl.exe -X GET "http://localhost:3002/?difficulty=hard&topic=binary-search"
     r.GET("/", h.GetQuestionsRequest)
 	// available questions (excludes completed) — must be before /:id
 	r.GET("/available", h.GetAvailableQuestionsRequest)

@@ -2,19 +2,11 @@
  * Persist “Configure Session” choices in localStorage so they survive
  * navigating to Matching, cancel/back, refresh, etc.
  */
+import { MATCH_TOPIC_OPTIONS } from "../constants/matchTopics";
+
 const STORAGE_KEY = "peerprep_match_form_draft_v1";
 
-const TOPICS = new Set([
-  "arrays",
-  "two-pointers",
-  "sliding-window",
-  "stack",
-  "binary-search",
-  "linked-list",
-  "trees",
-  "graphs",
-  "dp",
-]);
+const TOPICS = new Set(MATCH_TOPIC_OPTIONS.map((o) => o.value));
 
 const DIFFICULTIES = new Set(["easy", "medium", "hard"]);
 

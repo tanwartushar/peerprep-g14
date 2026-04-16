@@ -23,6 +23,7 @@ import {
   loadMatchFormDraft,
   saveMatchFormDraft,
 } from "../matching/matchFormDraft";
+import { MATCH_TOPIC_OPTIONS } from "../constants/matchTopics";
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -236,18 +237,6 @@ export const Dashboard: React.FC = () => {
     { value: "hard", label: "Hard" },
   ];
 
-  const topicOptions = [
-    { value: "arrays", label: "Arrays & Hashing" },
-    { value: "two-pointers", label: "Two Pointers" },
-    { value: "sliding-window", label: "Sliding Window" },
-    { value: "stack", label: "Stack" },
-    { value: "binary-search", label: "Binary Search" },
-    { value: "linked-list", label: "Linked List" },
-    { value: "trees", label: "Trees" },
-    { value: "graphs", label: "Graphs" },
-    { value: "dp", label: "Dynamic Programming" },
-  ];
-
   const languageOptions = [
     { value: "javascript", label: "JavaScript" },
     { value: "typescript", label: "TypeScript" },
@@ -314,7 +303,7 @@ export const Dashboard: React.FC = () => {
               <Select
                 label="Interview Topic"
                 placeholder="Select Topic"
-                options={topicOptions}
+                options={MATCH_TOPIC_OPTIONS}
                 value={topic}
                 onChange={setTopic}
                 leftIcon={<BookOpen className="h-5 w-5" />}
