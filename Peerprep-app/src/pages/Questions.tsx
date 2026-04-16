@@ -20,6 +20,7 @@ import {
 } from "../../BackendClient";
 
 import "./Questions.css";
+import { MATCH_TOPIC_OPTIONS } from "../constants/matchTopics";
 
 type QuestionsTheme = "admin" | "user";
 
@@ -38,14 +39,6 @@ interface Question {
   imageUrls: string[];
   matched: number;
 }
-
-const availableTopics = [
-  { value: "binary_search", label: "Binary Search" },
-  { value: "depth_first_search", label: "Depth First Search" },
-  { value: "breadth_first_search", label: "Breadth First Search" },
-  { value: "singly_linked_list", label: "Singly Linked List" },
-  { value: "doubly_linked_list", label: "Doubly Linked List" },
-];
 
 const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
   const isAdmin = theme === "admin";
@@ -79,7 +72,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
   });
 
   const getTopicLabel = (value: string) => {
-    const topic = availableTopics.find((t) => t.value === value);
+    const topic = MATCH_TOPIC_OPTIONS.find((t) => t.value === value);
     return topic ? topic.label : value;
   };
 
@@ -328,7 +321,7 @@ const Questions: React.FC<QuestionsPageProps> = ({ theme = "user" }) => {
                 theme="admin"
                 label="Topics"
                 placeholder="Select Topics"
-                options={availableTopics}
+                options={MATCH_TOPIC_OPTIONS}
                 value={formData.topics}
                 onChange={(topics) =>
                   setFormData((prev) => ({ ...prev, topics }))
